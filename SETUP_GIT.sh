@@ -5,8 +5,9 @@
 
 set -e
 
-PROJECT_DIR="/home/recifecrypto/Documentos/CLAW IA - Live Server"
-cd "$PROJECT_DIR"
+# Detectar diretório do script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
 
 echo "🚀 Inicializando repositório Git para CLAW IA - LIVE SERVER..."
 echo ""

@@ -7,7 +7,7 @@ Este arquivo contém informações sobre o repositório GitHub para desenvolvedo
 ### 1. Inicializar Repositório Local
 
 ```bash
-cd "/home/recifecrypto/Documentos/CLAW IA - Live Server"
+cd ./CLAW-IA---LIVE-SERVER
 bash SETUP_GIT.sh
 ```
 

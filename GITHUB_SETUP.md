@@ -36,7 +36,7 @@ Seu projeto foi limpo e preparado com **apenas arquivos essenciais**:
 ### Fase 1: Inicializar Repositório Local
 
 ```bash
-cd "/home/recifecrypto/Documentos/CLAW IA - Live Server"
+cd ./CLAW-IA---LIVE-SERVER
 bash SETUP_GIT.sh
 ```
 

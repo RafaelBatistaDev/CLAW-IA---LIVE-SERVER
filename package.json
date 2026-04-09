@@ -2,7 +2,7 @@
   "name": "claw-ia-live-server",
   "displayName": "CLAW IA - LIVE SERVER",
   "description": "VS Code extension for live reload server with HTML, CSS and multiple programming languages support.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "RafaelBatista",
   "license": "MIT",
   "repository": {

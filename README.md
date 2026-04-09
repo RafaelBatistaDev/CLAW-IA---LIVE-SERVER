@@ -2,9 +2,9 @@
 
 > Servidor de desenvolvimento local com live reload para VS Code. Visualize suas paginas HTML, CSS e projetos React/Vite/Blazor em tempo real com apenas um clique.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.0.4-blue)
 ![Publisher](https://img.shields.io/badge/publisher-RafaelBatista-brightgreen)
-![VS Code](https://img.shields.io/badge/vscode-1.70%2B-blue)
+![VS Code](https://img.shields.io/badge/vscode-1.85%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Visão Geral
@@ -43,13 +43,15 @@ CLAW IA - LIVE SERVER é uma extensão poderosa e intuitiva para VS Code que ofe
 - Certificados auto-assinados
 - Perfeito para testes SSL/TLS locais
 
-🔒 **Segurança em Primeiro Lugar**
-- Validação contra path traversal attacks
-- Proteção contra XSS e script injection
-- Sanitização de entrada e saída
-- Headers de segurança HTTP
-- Validação de host e porta
-- Extensões de arquivo whitelist
+🔒 **Segurança em Primeiro Lugar** (v1.0.4+)
+- ✅ Proteção contra path traversal attacks
+- ✅ Prevenção de injeção XSS
+- ✅ Proteção contra script injection
+- ✅ Headers de segurança HTTP (CSP, X-Frame-Options)
+- ✅ Validação rigorosa de host e porta
+- ✅ Whitelist de extensões de arquivo
+- ✅ Rate limiting para proteção DDoS
+- ✅ Sanitização contextual de entrada/saída
 
 ## Instalacao
 
@@ -178,12 +180,31 @@ Ative `liveServerPlusPlus.useHttps` para usar certificados auto-assinados (util 
 ### Injetar Script em HEAD
 Altere `liveServerPlusPlus.reloadTag` para `head` se houver problemas com injecao em `body`.
 
+## Changelog
+
+### v1.0.4 (Atual)
+- ✨ Recompilação completa com otimizações
+- 🔒 Segurança aprimorada com rate limiting
+- 🐛 Correções de compatibilidade
+- 📦 Dependências atualizadas
+
+### v1.0.3
+- 🔒 Implementação de módulo de segurança
+- 🧪 Suite de testes com 20+ casos
+- 🚀 Otimizações de performance
+
+### v1.0.0
+- 🎉 Versão inicial
+- 🌐 Live reload com WebSocket
+- 🔧 Configurações personalizáveis
+
 ## Sobre
 
 - **Autor**: Rafael Batista
-- **Versao**: 1.0.0
+- **Versao**: 1.0.4
 - **Licenca**: MIT
 - **Repositorio**: [GitHub](https://github.com/RafaelBatistaDev/CLAW-IA---LIVE-SERVER)
+- **Marketplace**: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=RafaelBatista.claw-ia-live-server)
 
 ## Suporte
 
@@ -191,4 +212,12 @@ Encontrou um problema? Abra uma issue no [repositorio do projeto](https://github
 
 ---
 
+## Contribuições
+
+Contribuições são bem-vindas! Por favor, abra uma issue ou pull request no [repositorio](https://github.com/RafaelBatistaDev/CLAW-IA---LIVE-SERVER).
+
+---
+
 **Desenvolvido com ❤️ por [Rafael Batista](https://github.com/RafaelBatistaDev)**
+
+**Última atualização**: Abril 2026

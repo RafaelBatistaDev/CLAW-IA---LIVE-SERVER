@@ -4,7 +4,7 @@
 
 Se você descobrir uma vulnerabilidade de segurança, **não abra uma issue pública**. 
 
-Por favor, envie um email para: **rafael@example.com** com:
+Por favor, envie um email para: **rafaelbatistadev@outlook.com.br** com:
 - Descrição da vulnerabilidade
 - Passos para reproduzir
 - Possível impacto
@@ -21,7 +21,7 @@ Todos os problemas de segurança conhecidos foram corrigidos:
 - ✅ File Extension Whitelist
 
 ### Contatos de Segurança
-Rafael Batista - rafael@example.com
+Rafael Batista - rafaelbatistadev@outlook.com.br
 
 Seu relatório será respondido em até 48 horas com próximos passos.
 

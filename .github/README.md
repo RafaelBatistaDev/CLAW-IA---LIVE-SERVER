@@ -105,7 +105,7 @@ Veja [AI_DETECTION_EXTENSION.md](../AI_DETECTION_EXTENSION.md) para detalhes do 
 ## Contatos
 
 - **Autor**: Rafael Batista
-- **Email**: rafael@example.com
+- **Email**: rafaelbatistadev@outlook.com.br
 - **GitHub**: https://github.com/RafaelBatistaDev
 
 ## Licença

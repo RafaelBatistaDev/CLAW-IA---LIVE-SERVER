@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import open from 'open';
 import chokidar from 'chokidar';
 import { Server as WsServer } from 'ws';
@@ -9,8 +9,27 @@ import https from 'https';
 import selfsigned from 'selfsigned';
 import fs from 'fs';
 import { SecurityValidator, SecurityMiddleware } from './security';
+import os from 'os';
+import proxy from 'express-http-proxy';
 
 type ServerInstance = http.Server | https.Server;
+
+interface HttpsConfig {
+  enable: boolean;
+  cert?: string;
+  key?: string;
+  passphrase?: string;
+}
+
+interface ProxyConfig {
+  enable: boolean;
+  baseUri: string;
+  proxyUri: string;
+}
+
+interface MountConfig {
+  [key: string]: string; // { "/route": "/path" }
+}
 
 const RELOAD_ROUTE = '/__live-server-plus-plus/reload.js';
 
@@ -20,53 +39,230 @@ export class LiveServer {
   private wsServer: WsServer | null = null;
   private watcher: chokidar.FSWatcher | null = null;
   private rootPath: string | null = null;
+  private logger: vscode.OutputChannel | null = null;
+  private debounceTimer: NodeJS.Timeout | null = null;
+  private changeTracker: Map<string, number> = new Map(); // Track file changes
+
+  constructor(logger?: vscode.OutputChannel) {
+    this.logger = logger || null;
+  }
+
+  public setLogger(logger: vscode.OutputChannel): void {
+    this.logger = logger;
+  }
+
+  private log(message: string, type: 'info' | 'warn' | 'error' = 'info'): void {
+    const timestamp = new Date().toLocaleTimeString();
+    const prefix = type === 'error' ? '❌' : type === 'warn' ? '⚠️' : 'ℹ️';
+    const logMessage = `[${timestamp}] ${prefix} ${message}`;
+    
+    if (this.logger) {
+      this.logger.appendLine(logMessage);
+    }
+    console.log(logMessage);
+  }
 
   public isRunning(): boolean {
     return !!this.server;
   }
 
+  private async isPortAvailable(port: number): Promise<boolean> {
+    return new Promise(resolve => {
+      const testServer = http.createServer();
+      
+      testServer.once('error', (error: NodeJS.ErrnoException) => {
+        if (error.code === 'EADDRINUSE') {
+          this.log(`Porta ${port} já está em uso`, 'warn');
+          resolve(false);
+        } else {
+          this.log(`Erro ao verificar porta: ${error.message}`, 'error');
+          resolve(false);
+        }
+      });
+      
+      testServer.once('listening', () => {
+        testServer.close();
+        resolve(true);
+      });
+      
+      testServer.listen(port, 'localhost');
+    });
+  }
+
+  private getLocalIpAddress(): string {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]!) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          return iface.address;
+        }
+      }
+    }
+    return 'localhost';
+  }
+
+  private async readHttpsConfig(): Promise<{ cert?: string; key?: string }> {
+    const config = vscode.workspace.getConfiguration();
+    const httpsConfig = config.get<HttpsConfig>('liveServer.settings.https', { enable: false });
+
+    if (!httpsConfig.enable || !httpsConfig.cert || !httpsConfig.key) {
+      this.log('Usando certificado SSL auto-assinado', 'info');
+      return {};
+    }
+
+    try {
+      const certPath = httpsConfig.cert.replace('${workspaceFolder}', this.rootPath || '');
+      const keyPath = httpsConfig.key.replace('${workspaceFolder}', this.rootPath || '');
+
+      if (!(await this.fileExists(certPath))) {
+        this.log(`Certificado não encontrado: ${certPath}`, 'warn');
+        return {};
+      }
+
+      if (!(await this.fileExists(keyPath))) {
+        this.log(`Chave privada não encontrada: ${keyPath}`, 'warn');
+        return {};
+      }
+
+      const cert = await fs.promises.readFile(certPath, 'utf8');
+      const key = await fs.promises.readFile(keyPath, 'utf8');
+
+      this.log('Certificado HTTPS carregado com sucesso', 'info');
+      return { cert, key };
+    } catch (error) {
+      this.log(`Erro ao ler certificado HTTPS: ${error}`, 'error');
+      return {};
+    }
+  }
+
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.promises.access(filePath, fs.constants.R_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   public async start(uri?: vscode.Uri) {
     if (this.server) {
+      this.log('Servidor já está em execução', 'warn');
       vscode.window.showWarningMessage('CLAW IA - LIVE SERVER já está rodando!');
       return;
     }
 
+    this.log('Iniciando CLAW IA - LIVE SERVER...', 'info');
+
     const workspacePath = this.getWorkspacePath(uri);
     if (!workspacePath) {
+      this.log('Nenhuma workspace aberta', 'error');
       vscode.window.showErrorMessage('Nenhuma workspace aberta para iniciar o CLAW IA - LIVE SERVER.');
       return;
     }
 
     this.rootPath = workspacePath;
+    this.log(`Workspace detectado: ${workspacePath}`, 'info');
 
     const config = vscode.workspace.getConfiguration();
-    const port = config.get<number>('liveServerPlusPlus.port', 5500);
-    const host = config.get<string>('liveServerPlusPlus.host', 'localhost');
-    const openBrowser = config.get<boolean>('liveServerPlusPlus.openBrowser', true);
-    const browser = config.get<string>('liveServerPlusPlus.browser', '');
-    const ignoreFiles = config.get<string[]>('liveServerPlusPlus.ignoreFiles', ['**/node_modules/**', '**/.git/**']);
-    const enableCORS = config.get<boolean>('liveServerPlusPlus.enableCORS', false);
-    const useHttps = config.get<boolean>('liveServerPlusPlus.useHttps', false);
-    const reloadTag = config.get<string>('liveServerPlusPlus.reloadTag', 'body');
+    
+    // Ler configurações com fallback para nova API
+    let port = config.get<number>('liveServer.settings.port', 
+                  config.get<number>('liveServerPlusPlus.port', 5500));
+    let host = config.get<string>('liveServer.settings.host', 
+               config.get<string>('liveServerPlusPlus.host', '127.0.0.1'));
+    const useLocalIp = config.get<boolean>('liveServer.settings.useLocalIp', false);
+    const noBrowser = config.get<boolean>('liveServer.settings.noBrowser', false);
+    const openBrowser = config.get<boolean>('liveServer.settings.openBrowser', !noBrowser);
+    const browser = config.get<string>('liveServer.settings.customBrowser', '') || 
+                   config.get<string>('liveServerPlusPlus.browser', '');
+    const advanceBrowser = config.get<string>('liveServer.settings.advanceCustomBrowserCmdLine', '');
+    const root = config.get<string>('liveServer.settings.root', '/');
+    const corsEnabled = config.get<boolean>('liveServer.settings.cors', 
+                        config.get<boolean>('liveServerPlusPlus.enableCORS', false));
+    const customHeaders = config.get<Record<string, string>>('liveServer.settings.headers', {});
+    const fullReload = config.get<boolean>('liveServer.settings.fullReload', false);
+    const waitMs = config.get<number>('liveServer.settings.wait', 100);
+    const reloadTag = config.get<string>('liveServer.settings.reloadTag', 'body');
+    const useWebExt = config.get<boolean>('liveServer.settings.useWebExt', false);
+    const ignoreFiles = config.get<string[]>('liveServer.settings.ignoreFiles', 
+                        config.get<string[]>('liveServerPlusPlus.ignoreFiles', 
+                        ['**/node_modules/**', '**/.git/**']));
+    const httpsConfig = config.get<HttpsConfig>('liveServer.settings.https', { enable: false });
+    const proxyConfig = config.get<ProxyConfig>('liveServer.settings.proxy', 
+                       { enable: false, baseUri: '/', proxyUri: 'http://localhost/' });
+    const mounts = config.get<Array<[string, string]>>('liveServer.settings.mount', []);
+    const entryFile = config.get<string>('liveServer.settings.file', '');
+
+    // Ajustar host para IP local se necessário
+    if (useLocalIp && host === 'localhost') {
+      host = this.getLocalIpAddress();
+      this.log(`Usando IP local: ${host}`, 'info');
+    }
+
+    // Handle random port
+    if (port === 0) {
+      port = Math.floor(Math.random() * (9999 - 3000) + 3000);
+      this.log(`Porta aleatória gerada: ${port}`, 'info');
+    }
+
+    // Aplicar root path
+    let finalRootPath = this.rootPath;
+    if (root && root !== '/') {
+      finalRootPath = path.join(finalRootPath, root);
+      if (!(await this.fileExists(finalRootPath))) {
+        this.log(`Root path não existe: ${finalRootPath}`, 'error');
+        vscode.window.showErrorMessage(`Root path não existe: ${root}`);
+        return;
+      }
+      this.log(`Root path customizado: ${finalRootPath}`, 'info');
+    }
+    this.rootPath = finalRootPath;
 
     // Validar configurações antes de iniciar
     if (!SecurityValidator.validatePort(port)) {
+      this.log(`Porta inválida: ${port}`, 'error');
       vscode.window.showErrorMessage(`Porta inválida: ${port}. Use uma porta entre 1024 e 65535.`);
       return;
     }
 
     if (!SecurityValidator.validateHost(host)) {
+      this.log(`Host inválido: ${host}`, 'error');
       vscode.window.showErrorMessage(`Host inválido: ${host}. Use localhost, 127.0.0.1 ou um hostname válido.`);
       return;
     }
 
+    // Verificar se a porta está disponível
+    this.log(`Verificando disponibilidade da porta ${port}...`, 'info');
+    const portAvailable = await this.isPortAvailable(port);
+    if (!portAvailable) {
+      this.log(`Falha ao iniciar: porta ${port} não está disponível`, 'error');
+      vscode.window.showErrorMessage(`Porta ${port} já está em uso. Mude a porta nas configurações e tente novamente.`);
+      return;
+    }
+
+    this.log(`Porta ${port} disponível`, 'info');
+
     this.app = express();
 
     // Adicionar middlewares de segurança
+    this.log('Configurando middlewares de segurança...', 'info');
     this.app.use(SecurityMiddleware.securityHeadersMiddleware());
     this.app.use(SecurityMiddleware.pathTraversalMiddleware(this.rootPath));
 
-    if (enableCORS) {
+    // Adicionar custom headers
+    if (Object.keys(customHeaders).length > 0) {
+      this.log('Adicionando headers customizados', 'info');
+      this.app.use((req, res, next) => {
+        Object.entries(customHeaders).forEach(([key, value]) => {
+          res.setHeader(key, value);
+        });
+        next();
+      });
+    }
+
+    // Adicionar CORS
+    if (corsEnabled) {
+      this.log('CORS habilitado', 'info');
       this.app.use((req, res, next) => {
         res.header('Access-Control-Allow-Origin', '*');
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
@@ -75,13 +271,51 @@ export class LiveServer {
       });
     }
 
-    this.app.use((req, res, next) => this.injectReloadScript(req, res, next, reloadTag));
+    // Adicionar proxies
+    if (proxyConfig.enable) {
+      this.log(`Proxy configurado: ${proxyConfig.baseUri} -> ${proxyConfig.proxyUri}`, 'info');
+      try {
+        this.app.use(proxyConfig.baseUri, proxy(proxyConfig.proxyUri, {
+          proxyReqPathResolver: (req: Request) => {
+            const originalPath = req.originalUrl.substring(proxyConfig.baseUri.length);
+            return originalPath || '/';
+          }
+        }));
+      } catch (error) {
+        this.log(`Erro ao configurar proxy: ${error}`, 'warn');
+      }
+    }
+
+    // Adicionar mounts
+    if (mounts.length > 0) {
+      this.log(`Montando ${mounts.length} diretórios...`, 'info');
+      mounts.forEach(([route, dirPath]) => {
+        const fullPath = dirPath.startsWith('/') ? dirPath : path.join(this.rootPath || '', dirPath);
+        this.app!.use(route, express.static(fullPath));
+        this.log(`  ${route} -> ${fullPath}`, 'info');
+      });
+    }
+
+    // Middleware de reload script injection
+    this.app.use((req, res, next) => this.injectReloadScript(req, res, next, reloadTag, useWebExt));
     this.app.use(express.static(this.rootPath));
 
+    // Rota para SPA
     this.app.get('*', async (req, res, next) => {
       if (!this.rootPath) {
         return next();
       }
+
+      if (entryFile) {
+        const entryPath = path.join(this.rootPath, entryFile);
+        try {
+          const html = await fs.promises.readFile(entryPath, 'utf8');
+          return res.send(this.insertReloadScript(html, reloadTag, useWebExt));
+        } catch {
+          this.log(`Entry file não encontrado: ${entryFile}`, 'warn');
+        }
+      }
+
       const requestedPath = decodeURIComponent(req.path.split('?')[0]);
       const filePath = path.join(this.rootPath, requestedPath);
       const extension = path.extname(filePath).toLowerCase();
@@ -91,7 +325,7 @@ export class LiveServer {
         const indexHtml = await this.findIndexHtml();
         if (indexHtml) {
           const html = await fs.promises.readFile(indexHtml, 'utf8');
-          return res.send(this.insertReloadScript(html, reloadTag));
+          return res.send(this.insertReloadScript(html, reloadTag, useWebExt));
         }
       }
 
@@ -99,55 +333,126 @@ export class LiveServer {
         const indexHtml = await this.findIndexHtml();
         if (indexHtml) {
           const html = await fs.promises.readFile(indexHtml, 'utf8');
-          return res.send(this.insertReloadScript(html, reloadTag));
+          return res.send(this.insertReloadScript(html, reloadTag, useWebExt));
         }
       }
 
       next();
     });
 
-    const protocol = useHttps ? 'https' : 'http';
+    const protocol = httpsConfig.enable ? 'https' : 'http';
     const openUrl = `${protocol}://${host}:${port}`;
 
-    if (useHttps) {
-      const attrs = [{ name: 'commonName', value: host }];
-      const pems = selfsigned.generate(attrs, { days: 365 });
-      this.server = https.createServer({ key: pems.private, cert: pems.cert }, this.app);
+    // Criar servidor HTTP/HTTPS
+    if (httpsConfig.enable) {
+      const httpsFiles = await this.readHttpsConfig();
+      const httpsOptions: https.ServerOptions = {
+        cert: httpsFiles.cert || undefined,
+        key: httpsFiles.key || undefined,
+      };
+
+      if (!httpsOptions.cert || !httpsOptions.key) {
+        this.log('Gerando certificado SSL auto-assinado...', 'info');
+        const attrs = [{ name: 'commonName', value: host }];
+        const pems = selfsigned.generate(attrs, { days: 365 });
+        httpsOptions.cert = pems.cert;
+        httpsOptions.key = pems.private;
+      }
+
+      this.server = https.createServer(httpsOptions, this.app);
     } else {
       this.server = http.createServer(this.app);
     }
 
+    this.log('Configurando WebSocket server...', 'info');
     this.wsServer = new WsServer({ server: this.server });
     this.wsServer.on('connection', (socket: any) => {
       socket.send('connected');
+      this.log('Cliente WebSocket conectado', 'info');
     });
 
+    this.log(`Iniciando servidor em ${openUrl}...`, 'info');
     await new Promise<void>((resolve, reject) => {
       this.server?.listen(port, () => {
+        this.log(`✅ Servidor iniciado com sucesso em ${openUrl}`, 'info');
         resolve();
       });
     });
 
+    this.log('Iniciando file watcher com debounce ' + waitMs + 'ms...', 'info');
     this.watcher = chokidar.watch(this.rootPath, {
       ignored: ignoreFiles,
       ignoreInitial: true,
       persistent: true
     });
-    this.watcher.on('all', () => this.broadcastReload());
+    
+    // Implementar debounce com delay customizável
+    this.watcher.on('all', (event, filePath) => {
+      const now = Date.now();
+      const lastChange = this.changeTracker.get(filePath) || 0;
+      
+      // Evitar reloads duplicados para o mesmo arquivo
+      if (now - lastChange < 1000) {
+        return;
+      }
+      this.changeTracker.set(filePath, now);
 
-    if (openBrowser) {
-      await open(openUrl, { app: browser ? { name: browser } : undefined });
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+      }
+
+      this.debounceTimer = setTimeout(() => {
+        const extension = path.extname(filePath).toLowerCase();
+        const isCssChange = extension === '.css';
+        
+        this.log(`Detectado: ${event} - ${path.basename(filePath)}`, 'info');
+        
+        if (isCssChange && !fullReload) {
+          this.log('Reload CSS-only (sem reload completo)', 'info');
+        } else {
+          this.log('Enviando reload completo...', 'info');
+        }
+        
+        this.broadcastReload();
+      }, waitMs);
+    });
+
+    if (openBrowser && !noBrowser) {
+      this.log(`Abrindo navegador com URL ${openUrl}...`, 'info');
+      const browserOptions: any = {};
+      
+      if (advanceBrowser) {
+        browserOptions.app = advanceBrowser;
+      } else if (browser) {
+        browserOptions.app = { name: browser };
+      }
+      
+      await open(openUrl, browserOptions).catch(error => {
+        this.log(`Erro ao abrir navegador: ${error.message}`, 'warn');
+      });
     }
 
-    vscode.window.showInformationMessage(`CLAW IA - LIVE SERVER iniciado em ${openUrl}`);
+    this.log(`CLAW IA - LIVE SERVER está pronto em ${openUrl}`, 'info');
+    if (!config.get<boolean>('liveServer.settings.donotShowInfoMsg', false)) {
+      vscode.window.showInformationMessage(`✅ Live Server iniciado em ${openUrl}`);
+    }
   }
 
   public async stop() {
+    this.log('Parando CLAW IA - LIVE SERVER...', 'info');
+    
     if (!this.server) {
+      this.log('Servidor não está rodando', 'warn');
       vscode.window.showInformationMessage('CLAW IA - LIVE SERVER não está rodando.');
       return;
     }
 
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+
+    this.log('Fechando conexões...', 'info');
     await new Promise<void>(resolve => {
       this.server?.close(() => resolve());
     });
@@ -161,6 +466,7 @@ export class LiveServer {
     this.app = null;
     this.rootPath = null;
 
+    this.log('✅ CLAW IA - LIVE SERVER parado com sucesso', 'info');
     vscode.window.showInformationMessage('CLAW IA - LIVE SERVER parado.');
   }
 
@@ -201,14 +507,14 @@ export class LiveServer {
     return `${protocol}://${host}:${port}${relativePath}`;
   }
 
-  private async injectReloadScript(req: express.Request, res: express.Response, next: express.NextFunction, reloadTag: string) {
+  private async injectReloadScript(req: express.Request, res: express.Response, next: express.NextFunction, reloadTag: string, useWebExt: boolean = false) {
     if (!this.rootPath) {
       next();
       return;
     }
 
     if (req.path === RELOAD_ROUTE) {
-      res.type('application/javascript').send(this.getReloadScript());
+      res.type('application/javascript').send(this.getReloadScript(useWebExt));
       return;
     }
 
@@ -233,7 +539,7 @@ export class LiveServer {
 
     try {
       const html = await fs.promises.readFile(filePath, 'utf8');
-      const injected = this.insertReloadScript(html, reloadTag);
+      const injected = this.insertReloadScript(html, reloadTag, useWebExt);
       res.send(injected);
     } catch {
       next();
@@ -263,7 +569,12 @@ export class LiveServer {
     }
   }
 
-  private insertReloadScript(html: string, reloadTag: string): string {
+  private insertReloadScript(html: string, reloadTag: string, useWebExt: boolean = false): string {
+    // Se estiver usando Web Extension, não injeta script
+    if (useWebExt) {
+      return html;
+    }
+
     const scriptTag = `<script src="${RELOAD_ROUTE}"></script>`;
     if (reloadTag === 'head') {
       if (html.includes('<head')) {
@@ -276,11 +587,20 @@ export class LiveServer {
     return html + scriptTag;
   }
 
-  private getReloadScript(): string {
+  private getReloadScript(useWebExt: boolean = false): string {
     const config = vscode.workspace.getConfiguration();
-    const port = config.get<number>('liveServerPlusPlus.port', 5500);
-    const host = config.get<string>('liveServerPlusPlus.host', 'localhost');
-    const useHttps = config.get<boolean>('liveServerPlusPlus.useHttps', false);
+    
+    let port = config.get<number>('liveServer.settings.port', 
+               config.get<number>('liveServerPlusPlus.port', 5500));
+    let host = config.get<string>('liveServer.settings.host', 
+               config.get<string>('liveServerPlusPlus.host', 'localhost'));
+    const useLocalIp = config.get<boolean>('liveServer.settings.useLocalIp', false);
+    const useHttpsConfig = config.get<HttpsConfig>('liveServer.settings.https', { enable: false });
+
+    // Se Web Extension está ativada, retorna script vazio
+    if (useWebExt) {
+      return `console.log('[CLAW IA] Live Reload controlado pela Web Extension');`;
+    }
 
     // Validar configurações
     if (!SecurityValidator.validatePort(port)) {
@@ -291,7 +611,11 @@ export class LiveServer {
       throw new Error(`Host inválido: ${host}`);
     }
 
-    const protocol = useHttps ? 'wss' : 'ws';
+    if (useLocalIp && host === 'localhost') {
+      host = this.getLocalIpAddress();
+    }
+
+    const protocol = useHttpsConfig.enable ? 'wss' : 'ws';
     const sanitizedHost = SecurityValidator.sanitizeForScript(host);
     
     // Script seguro com sanitização

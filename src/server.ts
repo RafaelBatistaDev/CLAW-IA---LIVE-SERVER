@@ -118,17 +118,13 @@ export class LiveServer {
     }
 
     this.wsServer = new WsServer({ server: this.server });
-    this.wsServer.on('connection', socket => {
+    this.wsServer.on('connection', (socket: any) => {
       socket.send('connected');
     });
 
     await new Promise<void>((resolve, reject) => {
-      this.server?.listen(port, host, err => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
+      this.server?.listen(port, () => {
+        resolve();
       });
     });
 

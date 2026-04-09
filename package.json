@@ -1,0 +1,162 @@
+{
+  "name": "claw-ia-live-server",
+  "displayName": "CLAW IA - LIVE SERVER",
+  "description": "Extensao VS Code para live reload de HTML, CSS e multiplas linguagens, com suporte a multi-root, atalhos e configuracao avançada.",
+  "version": "1.0.0",
+  "publisher": "RafaelBatista",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:RafaelBatistaDev/CLAW-IA---LIVE-SERVER.git"
+  },
+  "engines": {
+    "vscode": ">=1.70.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onCommand:liveServer.open",
+    "onCommand:liveServer.start",
+    "onCommand:liveServer.stop",
+    "onCommand:liveServer.toggle",
+    "onCommand:liveServer.openFile",
+    "onCommand:liveServer.openSettings"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "liveServer.open",
+        "title": "CLAW IA - LIVE SERVER: Open With Live Server"
+      },
+      {
+        "command": "liveServer.openFile",
+        "title": "CLAW IA - LIVE SERVER: Open File With Live Server"
+      },
+      {
+        "command": "liveServer.start",
+        "title": "CLAW IA - LIVE SERVER: Start Server"
+      },
+      {
+        "command": "liveServer.stop",
+        "title": "CLAW IA - LIVE SERVER: Stop Server"
+      },
+      {
+        "command": "liveServer.toggle",
+        "title": "CLAW IA - LIVE SERVER: Toggle Server"
+      },
+      {
+        "command": "liveServer.openSettings",
+        "title": "CLAW IA - LIVE SERVER: Open Configuration"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "liveServer.open",
+        "key": "alt+l alt+o",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "liveServer.stop",
+        "key": "alt+l alt+c",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "liveServer.open",
+        "key": "cmd+l cmd+o",
+        "when": "editorTextFocus && isMac"
+      },
+      {
+        "command": "liveServer.stop",
+        "key": "cmd+l cmd+c",
+        "when": "editorTextFocus && isMac"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "liveServer.open",
+          "when": "editorLangId == html || editorLangId == css || editorLangId == javascript || editorLangId == typescript || editorLangId == javascriptreact || editorLangId == typescriptreact || editorLangId == razor || editorTextFocus"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "liveServer.openFile",
+          "when": "resourceFilename =~ /\\.(html|htm|js|jsx|ts|tsx|cshtml|razor)$/"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "CLAW IA - LIVE SERVER",
+      "properties": {
+        "liveServerPlusPlus.port": {
+          "type": "number",
+          "default": 5500,
+          "description": "Port used by CLAW IA - LIVE SERVER."
+        },
+        "liveServerPlusPlus.host": {
+          "type": "string",
+          "default": "localhost",
+          "description": "Host name used by CLAW IA - LIVE SERVER."
+        },
+        "liveServerPlusPlus.openBrowser": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the browser automatically when the server starts."
+        },
+        "liveServerPlusPlus.browser": {
+          "type": "string",
+          "default": "",
+          "description": "Optional browser command name to open when the server starts."
+        },
+        "liveServerPlusPlus.ignoreFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["**/node_modules/**", "**/.git/**"],
+          "description": "Files and folders to ignore for live reload detection."
+        },
+        "liveServerPlusPlus.enableCORS": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable CORS headers for served files."
+        },
+        "liveServerPlusPlus.useHttps": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use HTTPS for the local live server."
+        },
+        "liveServerPlusPlus.reloadTag": {
+          "type": "string",
+          "enum": ["body", "head"],
+          "default": "body",
+          "description": "Where to inject the live reload script within served HTML pages."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.14",
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.70.0",
+    "typescript": "^4.7.0",
+    "eslint": "^8.0.0",
+    "vsce": "^2.10.0"
+  },
+  "dependencies": {
+    "chokidar": "^3.5.3",
+    "express": "^4.18.2",
+    "express-rate-limit": "^6.7.0",
+    "open": "^9.0.0",
+    "selfsigned": "^1.10.14",
+    "ws": "^8.13.0"
+  }
+}

@@ -2,7 +2,7 @@
 
 > Servidor de desenvolvimento local com live reload para VS Code. Visualize suas paginas HTML, CSS e projetos React/Vite/Blazor em tempo real com apenas um clique.
 
-![Version](https://img.shields.io/badge/version-1.0.4-blue)
+![Version](https://img.shields.io/badge/version-1.0.6-blue)
 ![Publisher](https://img.shields.io/badge/publisher-RafaelBatista-brightgreen)
 ![VS Code](https://img.shields.io/badge/vscode-1.85%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -43,7 +43,7 @@ CLAW IA - LIVE SERVER é uma extensão poderosa e intuitiva para VS Code que ofe
 - Certificados auto-assinados
 - Perfeito para testes SSL/TLS locais
 
-🔒 **Segurança em Primeiro Lugar** (v1.0.4+)
+🔒 **Segurança em Primeiro Lugar** (v1.0.6+)
 - ✅ Proteção contra path traversal attacks
 - ✅ Prevenção de injeção XSS
 - ✅ Proteção contra script injection
@@ -182,7 +182,15 @@ Altere `liveServerPlusPlus.reloadTag` para `head` se houver problemas com injeca
 
 ## Changelog
 
-### v1.0.4 (Atual)
+### v1.0.6 (Atual)
+- 🎨 **WebviewPanel Integrado** - Visualize o servidor local dentro do VS Code
+- 📌 **Status Bar Item** - Controle rápido de Start/Stop na barra inferior
+- 🌐 **Navegador Externo** - Abra no navegador padrão do sistema (Linux/Windows/Mac)
+- 🗂️ **Detecção de Linguagem** - Reconhece HTML, CSS, JavaScript, TypeScript e mais
+- 🎯 **Menu do Editor** - Botões visíveis direto nos arquivos abertos
+- 🐛 **Correção de Tags** - ativationEvents ajustado para compatibilidade Marketplace
+
+### v1.0.4
 - ✨ Recompilação completa com otimizações
 - 🔒 Segurança aprimorada com rate limiting
 - 🐛 Correções de compatibilidade
@@ -201,7 +209,7 @@ Altere `liveServerPlusPlus.reloadTag` para `head` se houver problemas com injeca
 ## Sobre
 
 - **Autor**: Rafael Batista
-- **Versao**: 1.0.4
+- **Versao**: 1.0.6
 - **Licenca**: MIT
 - **Repositorio**: [GitHub](https://github.com/RafaelBatistaDev/CLAW-IA---LIVE-SERVER)
 - **Marketplace**: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=RafaelBatista.claw-ia-live-server)

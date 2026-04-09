@@ -2,7 +2,7 @@
   "name": "claw-ia-live-server",
   "displayName": "CLAW IA - LIVE SERVER",
   "description": "VS Code extension for live reload server with HTML, CSS and multiple programming languages support.",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "RafaelBatista",
   "icon": "icon.png",
   "license": "MIT",
@@ -62,7 +62,24 @@
         {
           "command": "claw.openExternal",
           "group": "navigation",
-          "when": "editorTextFocus"
+          "when": "editorLangId == html || editorLangId == css || editorLangId == javascript || editorLangId == typescript || editorLangId == javascriptreact || editorLangId == typescriptreact"
+        },
+        {
+          "command": "claw.startServer",
+          "group": "navigation",
+          "when": "editorLangId == html || editorLangId == css || editorLangId == javascript || editorLangId == typescript || editorLangId == javascriptreact || editorLangId == typescriptreact"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "claw.openExternal",
+          "group": "navigation",
+          "when": "editorLangId == html || editorLangId == css || editorLangId == javascript || editorLangId == typescript || editorLangId == javascriptreact || editorLangId == typescriptreact"
+        },
+        {
+          "command": "claw.startServer",
+          "group": "navigation",
+          "when": "editorLangId == html || editorLangId == css || editorLangId == javascript || editorLangId == typescript || editorLangId == javascriptreact || editorLangId == typescriptreact"
         }
       ],
       "commandPalette": [

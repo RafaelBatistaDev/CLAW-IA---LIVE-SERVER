@@ -66,8 +66,8 @@ code --install-extension RafaelBatista.claw-ia-live-server
 
 ### Desenvolvimento Local
 ```bash
-git clone <repository-url>
-cd <folder>
+git clone git@github.com:RafaelBatistaDev/CLAW-IA---LIVE-SERVER.git
+cd CLAW-IA---LIVE-SERVER
 npm install
 npm run compile
 # Abra a pasta no VS Code e pressione F5 para debug
@@ -183,12 +183,12 @@ Altere `liveServerPlusPlus.reloadTag` para `head` se houver problemas com injeca
 - **Autor**: Rafael Batista
 - **Versao**: 1.0.0
 - **Licenca**: MIT
-- **Repositorio**: [GitHub](https://github.com/seu-usuario/claw-ia-live-server)
+- **Repositorio**: [GitHub](https://github.com/RafaelBatistaDev/CLAW-IA---LIVE-SERVER)
 
 ## Suporte
 
-Encontrou um problema? Abra uma issue no [repositorio do projeto](https://github.com/seu-usuario/claw-ia-live-server/issues).
+Encontrou um problema? Abra uma issue no [repositorio do projeto](https://github.com/RafaelBatistaDev/CLAW-IA---LIVE-SERVER/issues).
 
 ---
 
-**Desenvolvido com ❤️ por [Rafael Batista](https://github.com/seu-usuario)**
+**Desenvolvido com ❤️ por [Rafael Batista](https://github.com/RafaelBatistaDev)**

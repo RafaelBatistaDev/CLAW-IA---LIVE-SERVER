@@ -4,15 +4,32 @@
   "description": "Extensao VS Code para live reload de HTML, CSS e multiplas linguagens, com suporte a multi-root, atalhos e configuracao avançada.",
   "version": "1.0.0",
   "publisher": "RafaelBatista",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git@github.com:RafaelBatistaDev/CLAW-IA---LIVE-SERVER.git"
+    "url": "https://github.com/RafaelBatistaDev/CLAW-IA---LIVE-SERVER.git"
+  },
+  "homepage": "https://github.com/RafaelBatistaDev/CLAW-IA---LIVE-SERVER#readme",
+  "bugs": {
+    "url": "https://github.com/RafaelBatistaDev/CLAW-IA---LIVE-SERVER/issues"
   },
   "engines": {
-    "vscode": ">=1.70.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
     "Other"
+  ],
+  "keywords": [
+    "live",
+    "reload",
+    "server",
+    "http",
+    "development",
+    "html",
+    "css",
+    "javascript",
+    "react",
+    "vite"
   ],
   "activationEvents": [
     "onCommand:liveServer.open",

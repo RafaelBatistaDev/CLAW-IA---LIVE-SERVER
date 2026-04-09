@@ -2,7 +2,7 @@
   "name": "claw-ia-live-server",
   "displayName": "CLAW IA - LIVE SERVER",
   "description": "VS Code extension for live reload server with HTML, CSS and multiple programming languages support.",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publisher": "RafaelBatista",
   "icon": "icon.png",
   "license": "MIT",
@@ -33,132 +33,49 @@
     "vite"
   ],
   "activationEvents": [
-    "onCommand:liveServer.open",
-    "onCommand:liveServer.start",
-    "onCommand:liveServer.stop",
-    "onCommand:liveServer.toggle",
-    "onCommand:liveServer.openFile",
-    "onCommand:liveServer.openSettings"
+    "onStartupFinished",
+    "onCommand:claw.startServer",
+    "onCommand:claw.stopServer",
+    "onCommand:claw.openExternal"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "liveServer.open",
-        "title": "CLAW IA - LIVE SERVER: Open With Live Server"
+        "command": "claw.startServer",
+        "title": "CLAW: Iniciar Servidor",
+        "icon": "$(play)"
       },
       {
-        "command": "liveServer.openFile",
-        "title": "CLAW IA - LIVE SERVER: Open File With Live Server"
+        "command": "claw.stopServer",
+        "title": "CLAW: Parar Servidor",
+        "icon": "$(debug-stop)"
       },
       {
-        "command": "liveServer.start",
-        "title": "CLAW IA - LIVE SERVER: Start Server"
-      },
-      {
-        "command": "liveServer.stop",
-        "title": "CLAW IA - LIVE SERVER: Stop Server"
-      },
-      {
-        "command": "liveServer.toggle",
-        "title": "CLAW IA - LIVE SERVER: Toggle Server"
-      },
-      {
-        "command": "liveServer.openSettings",
-        "title": "CLAW IA - LIVE SERVER: Open Configuration"
-      }
-    ],
-    "keybindings": [
-      {
-        "command": "liveServer.open",
-        "key": "alt+l alt+o",
-        "when": "editorTextFocus"
-      },
-      {
-        "command": "liveServer.stop",
-        "key": "alt+l alt+c",
-        "when": "editorTextFocus"
-      },
-      {
-        "command": "liveServer.open",
-        "key": "cmd+l cmd+o",
-        "when": "editorTextFocus && isMac"
-      },
-      {
-        "command": "liveServer.stop",
-        "key": "cmd+l cmd+c",
-        "when": "editorTextFocus && isMac"
+        "command": "claw.openExternal",
+        "title": "CLAW: Abrir no Navegador Externo",
+        "icon": "$(browser)"
       }
     ],
     "menus": {
-      "editor/context": [
+      "editor/title": [
         {
-          "command": "liveServer.open",
-          "when": "editorLangId == html || editorLangId == css || editorLangId == javascript || editorLangId == typescript || editorLangId == javascriptreact || editorLangId == typescriptreact || editorLangId == razor || editorTextFocus"
+          "command": "claw.openExternal",
+          "group": "navigation",
+          "when": "editorTextFocus"
         }
       ],
-      "explorer/context": [
+      "commandPalette": [
         {
-          "command": "liveServer.openFile",
-          "when": "resourceFilename =~ /\\.(html|htm|js|jsx|ts|tsx|cshtml|razor)$/"
+          "command": "claw.startServer"
+        },
+        {
+          "command": "claw.stopServer"
+        },
+        {
+          "command": "claw.openExternal"
         }
       ]
-    },
-    "configuration": {
-      "type": "object",
-      "title": "CLAW IA - LIVE SERVER",
-      "properties": {
-        "liveServerPlusPlus.port": {
-          "type": "number",
-          "default": 5500,
-          "description": "Port used by CLAW IA - LIVE SERVER."
-        },
-        "liveServerPlusPlus.host": {
-          "type": "string",
-          "default": "localhost",
-          "description": "Host name used by CLAW IA - LIVE SERVER."
-        },
-        "liveServerPlusPlus.openBrowser": {
-          "type": "boolean",
-          "default": true,
-          "description": "Open the browser automatically when the server starts."
-        },
-        "liveServerPlusPlus.browser": {
-          "type": "string",
-          "default": "",
-          "description": "Optional browser command name to open when the server starts."
-        },
-        "liveServerPlusPlus.ignoreFiles": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "**/node_modules/**",
-            "**/.git/**"
-          ],
-          "description": "Files and folders to ignore for live reload detection."
-        },
-        "liveServerPlusPlus.enableCORS": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable CORS headers for served files."
-        },
-        "liveServerPlusPlus.useHttps": {
-          "type": "boolean",
-          "default": false,
-          "description": "Use HTTPS for the local live server."
-        },
-        "liveServerPlusPlus.reloadTag": {
-          "type": "string",
-          "enum": [
-            "body",
-            "head"
-          ],
-          "default": "body",
-          "description": "Where to inject the live reload script within served HTML pages."
-        }
-      }
     }
   },
   "scripts": {

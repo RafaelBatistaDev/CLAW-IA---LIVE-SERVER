@@ -1,8 +1,8 @@
 {
   "name": "claw-ia-live-server",
   "displayName": "CLAW IA - Live Server",
-  "description": "Launch a development local Server with live reload feature for static & dynamic pages.",
-  "version": "1.1.0",
+  "description": "Servidor local para Visual Studio Code com live reload, HTTPS automático, multi-root e abertura na URL ativa do servidor.",
+  "version": "1.1.1",
   "publisher": "RafaelBatista",
   "author": {
     "name": "Rafael Batista",
@@ -30,9 +30,10 @@
   },
   "categories": ["Other"],
   "keywords": [
-    "html preview", "live preview", "live reload", "open in browser",
-    "development server", "http-server", "hot reload", "web development",
-    "css", "html", "http", "javascript", "live", "reload", "server"
+    "live-server", "live-reload", "local-server", "development-server",
+    "vscode", "html", "css", "javascript", "typescript",
+    "spa", "https", "web-preview", "open-in-browser",
+    "hot-reload", "workspace", "multi-root", "static-server"
   ],
   "activationEvents": ["onStartupFinished"],
   "main": "./out/extension.js",
@@ -256,7 +257,7 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "package": "vsce package --out claw-ia-live-server-1.1.0.vsix",
+    "package": "vsce package --out claw-ia-live-server-1.1.1.vsix",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "test": "node ./out/test/runTest.js"

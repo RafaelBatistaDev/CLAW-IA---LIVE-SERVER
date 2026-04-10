@@ -1,25 +1,33 @@
 # CLAW IA - LIVE SERVER
 
-Uma extensão para Visual Studio Code que fornece um servidor local de desenvolvimento com live reload e configurações avançadas para HTML, CSS, JavaScript, TypeScript e frameworks modernos.
+Uma extensão profissional para Visual Studio Code que fornece um servidor local de desenvolvimento com live reload, suporte a multi-root workspace, HTTPS automático e abertura de páginas na URL ativa do servidor.
 
-## Recursos
+**Tags:** `Live Server`, `Live Reload`, `Local Dev Server`, `HTTPS`, `Multi-root`, `Web Preview`, `VS Code`, `SPA`
 
-- Servidor local com reload automático ao salvar
-- Comandos dedicados no Command Palette
-- Atalhos de teclado configuráveis
-- Suporte a multi-root workspace
-- HTTPS com certificado autoassinando
-- CORS opcional
-- Configuração completa via `settings.json`
-- Menu de contexto no editor e explorador
+## O que há de novo
+
+- `claw.openExternal` agora abre a URL ativa do Live Server
+- O servidor identifica o host e porta reais em tempo de execução
+- Atualizações de arquivo disparam reload automático da página
+- O live reload funciona via WebSocket e injeção de script em HTML
+
+## Principais recursos
+
+- Início/parada do servidor a partir do Command Palette ou status bar
+- Live reload automático em HTML/CSS/JS/TS ao salvar arquivos
+- Suporte para múltiplas workspaces no mesmo ambiente
+- SSL autoassinada para HTTPS com fallback automático
+- Abrir navegador externo na URL correta do servidor ativo
+- Configurações avançadas via `liveServer.settings.*`
+- Menu de contexto no editor e explorador para HTML/XML
 
 ## Instalação
 
-### Marketplace
+### Pelo Marketplace
 
 1. Abra o Visual Studio Code
-2. Acesse a aba Extensões (`Ctrl+Shift+X` / `Cmd+Shift+X`)
-3. Busque por `CLAW IA - LIVE SERVER`
+2. Acesse Extensões (`Ctrl+Shift+X` / `Cmd+Shift+X`)
+3. Pesquise por `CLAW IA - LIVE SERVER`
 4. Instale a extensão
 
 ### Instalação local
@@ -37,12 +45,12 @@ Abra a pasta no VS Code e pressione `F5` para executar em modo de desenvolviment
 
 ### Comandos disponíveis
 
-- `claw.toggleServer` — alterna o servidor
-- `claw.startServer` — inicia o servidor
+- `claw.toggleServer` — alterna entre iniciar e parar o servidor
+- `claw.startServer` — inicia o servidor usando o arquivo aberto ou workspace atual
 - `claw.stopServer` — para o servidor
-- `claw.openExternal` — abre no navegador externo
-- `claw.changeWorkspace` — altera workspace
-- `claw.showSettings` — abre as configurações
+- `claw.openExternal` — abre a página atual na URL ativa do Live Server
+- `claw.changeWorkspace` — troca o workspace de referência em ambientes multi-root
+- `claw.showSettings` — abre as configurações da extensão
 
 ### Atalhos padrão
 
@@ -53,9 +61,9 @@ Abra a pasta no VS Code e pressione `F5` para executar em modo de desenvolviment
 
 ## Configuração
 
-A extensão usa `liveServer.settings.*` no arquivo de configurações do VS Code.
+A extensão lê as configurações em `settings.json` usando o namespace `liveServer.settings`.
 
-Exemplo:
+Exemplo básico:
 
 ```json
 {
@@ -74,30 +82,36 @@ Exemplo:
 }
 ```
 
+### Configurações recomendadas
+
+- `liveServer.settings.noBrowser`: `false` para abrir automaticamente o servidor
+- `liveServer.settings.useLocalIp`: `true` para acessar de outros dispositivos na rede local
+- `liveServer.settings.cors`: `true` para desenvolvimento de APIs e aplicações front-end
+- `liveServer.settings.file`: define um arquivo de fallback para SPAs
+
 ## Desenvolvimento
 
-Use os scripts disponíveis em `package.json`:
+Use os scripts definidos em `package.json`:
 
-- `npm run compile` — compila TypeScript
-- `npm run package` — empacota extensão em `.vsix`
-- `npm run watch` — compila em modo watch
-- `npm test` — executa testes
+- `npm run compile` — compila o código TypeScript
+- `npm run package` — empacota a extensão em `.vsix`
+- `npm run watch` — compila automaticamente durante o desenvolvimento
+- `npm test` — executa a suíte de testes
 
-## Estrutura do Projeto
+## Estrutura do projeto
 
 - `src/` — código-fonte TypeScript
-- `out/` — saída de compilação (não versionada)
 - `test/` — testes automatizados
 - `package.json` — manifesto da extensão
 - `README.md` — documentação do projeto
 
 ## Contribuição
 
-Contribuições são bem-vindas! Abra issues e pull requests no repositório.
+Contribuições são bem-vindas. Abra issues ou pull requests no repositório para sugerir melhorias ou correções.
 
 ## Licença
 
-Licenciado sob MIT.
+Este projeto está licenciado sob a licença MIT.
 
 ## Contato
 

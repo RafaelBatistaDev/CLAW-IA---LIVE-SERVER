@@ -35,6 +35,9 @@ export class LiveServer {
   private wsServer: WsServer | null = null;
   private watcher: chokidar.FSWatcher | null = null;
   private rootPath: string | null = null;
+  private activeHost: string | null = null;
+  private activePort: number | null = null;
+  private activeProtocol: 'http' | 'https' = 'http';
   private logger: vscode.OutputChannel | null = null;
   private debounceTimer: NodeJS.Timeout | null = null;
   private changeTracker: Map<string, number> = new Map();
@@ -313,6 +316,10 @@ export class LiveServer {
     const protocol = httpsConfig.enable ? 'https' : 'http';
     const openUrl = `${protocol}://${host}:${port}`;
 
+    this.activeHost = host;
+    this.activePort = port;
+    this.activeProtocol = protocol;
+
     // Criar servidor HTTP ou HTTPS
     if (httpsConfig.enable) {
       const httpsFiles = await this.readHttpsConfig();
@@ -426,6 +433,9 @@ export class LiveServer {
     this.watcher = null;
     this.app = null;
     this.rootPath = null;
+    this.activeHost = null;
+    this.activePort = null;
+    this.activeProtocol = 'http';
     this.changeTracker.clear();
 
     this.log('✅ CLAW IA - LIVE SERVER parado com sucesso', 'info');
@@ -433,12 +443,17 @@ export class LiveServer {
   }
 
   public async open(uri?: vscode.Uri) {
+    const alreadyRunning = !!this.server;
     if (!this.server) await this.start(uri);
     if (!this.server || !this.rootPath) return;
 
     const url = this.buildUrl(uri);
-    await open(url);
-    vscode.window.showInformationMessage(`Abrindo CLAW IA - LIVE SERVER em ${url}`);
+    const noBrowser = vscode.workspace.getConfiguration().get<boolean>('liveServer.settings.noBrowser', false);
+
+    if (alreadyRunning || noBrowser) {
+      await open(url);
+      vscode.window.showInformationMessage(`Abrindo CLAW IA - LIVE SERVER em ${url}`);
+    }
   }
 
   private getWorkspacePath(uri?: vscode.Uri): string | null {
@@ -450,10 +465,12 @@ export class LiveServer {
 
   private buildUrl(uri?: vscode.Uri): string {
     const config = vscode.workspace.getConfiguration();
-    const port = config.get<number>('liveServer.settings.port', 5500);
-    const host = config.get<string>('liveServer.settings.host', '127.0.0.1');
-    const httpsConfig = config.get<HttpsConfig>('liveServer.settings.https', { enable: false });
-    const protocol = httpsConfig.enable ? 'https' : 'http';
+    const port = this.activePort ?? config.get<number>('liveServer.settings.port', 5500);
+    const host = this.activeHost ?? config.get<string>('liveServer.settings.host', '127.0.0.1');
+    const httpsConfig = this.activeProtocol === 'https'
+      ? { enable: true }
+      : config.get<HttpsConfig>('liveServer.settings.https', { enable: false });
+    const protocol = this.activeProtocol === 'https' || httpsConfig.enable ? 'https' : 'http';
 
     let relativePath = '';
     if (uri?.fsPath && this.rootPath) {
@@ -530,10 +547,12 @@ export class LiveServer {
     }
 
     const config = vscode.workspace.getConfiguration();
-    let port = config.get<number>('liveServer.settings.port', 5500);
-    let host = config.get<string>('liveServer.settings.host', '127.0.0.1');
+    const port = this.activePort ?? config.get<number>('liveServer.settings.port', 5500);
+    let host = this.activeHost ?? config.get<string>('liveServer.settings.host', '127.0.0.1');
     const useLocalIp = config.get<boolean>('liveServer.settings.useLocalIp', false);
-    const httpsConfig = config.get<HttpsConfig>('liveServer.settings.https', { enable: false });
+    const httpsConfig = this.activeProtocol === 'https'
+      ? { enable: true }
+      : config.get<HttpsConfig>('liveServer.settings.https', { enable: false });
 
     if (!SecurityValidator.validatePort(port)) throw new Error(`Porta inválida: ${port}`);
     if (!SecurityValidator.validateHost(host)) throw new Error(`Host inválido: ${host}`);

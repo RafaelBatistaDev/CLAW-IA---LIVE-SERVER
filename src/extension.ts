@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
-import * as http from 'http';
-import * as fs from 'fs';
-import * as path from 'path';
+import { LiveServer } from './server';
 
-let server: http.Server | undefined;
+const liveServer = new LiveServer();
 let statusBarItem: vscode.StatusBarItem;
 
 // -------------------------------------------------------
@@ -52,36 +50,34 @@ export function activate(context: vscode.ExtensionContext) {
   createStatusBarItem(context);
 
   // 2. Toggle (Iniciar / Parar)
-  const toggleServer = vscode.commands.registerCommand('claw.toggleServer', () => {
-    if (server?.listening) {
-      stopServer();
+  const toggleServer = vscode.commands.registerCommand('claw.toggleServer', async () => {
+    if (liveServer.isRunning()) {
+      await liveServer.stop();
     } else {
-      startServer();
+      const uri = vscode.window.activeTextEditor?.document.uri;
+      await liveServer.start(uri);
     }
+    updateStatusBar(liveServer.isRunning());
   });
 
   // 3. Iniciar
-  const startCmd = vscode.commands.registerCommand('claw.startServer', () => {
-    if (!server?.listening) {
-      startServer();
-    } else {
-      vscode.window.showInformationMessage('CLAW: Servidor já está rodando.');
-    }
+  const startCmd = vscode.commands.registerCommand('claw.startServer', async () => {
+    const uri = vscode.window.activeTextEditor?.document.uri;
+    await liveServer.start(uri);
+    updateStatusBar(liveServer.isRunning());
   });
 
   // 4. Parar
-  const stopCmd = vscode.commands.registerCommand('claw.stopServer', () => {
-    if (server?.listening) {
-      stopServer();
-    } else {
-      vscode.window.showInformationMessage('CLAW: Nenhum servidor ativo.');
-    }
+  const stopCmd = vscode.commands.registerCommand('claw.stopServer', async () => {
+    await liveServer.stop();
+    updateStatusBar(liveServer.isRunning());
   });
 
   // 5. Abrir no navegador externo
-  const openExternal = vscode.commands.registerCommand('claw.openExternal', () => {
-    const { host, port } = getConfig();
-    vscode.env.openExternal(vscode.Uri.parse(`http://${host}:${port}`));
+  const openExternal = vscode.commands.registerCommand('claw.openExternal', async () => {
+    const uri = vscode.window.activeTextEditor?.document.uri;
+    await liveServer.open(uri);
+    updateStatusBar(liveServer.isRunning());
   });
 
   // 6. Mudar workspace (multi-root)
@@ -113,7 +109,7 @@ export function activate(context: vscode.ExtensionContext) {
   const onConfigChange = vscode.workspace.onDidChangeConfiguration(e => {
     if (e.affectsConfiguration('liveServer.settings')) {
       createStatusBarItem(context);
-      updateStatusBar(!!server?.listening);
+      updateStatusBar(liveServer.isRunning());
     }
   });
 
@@ -130,66 +126,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 // -------------------------------------------------------
 // Iniciar servidor
-// -------------------------------------------------------
-function startServer() {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders) {
-    vscode.window.showErrorMessage('CLAW: Abra uma pasta para iniciar o servidor.');
-    return;
-  }
-
-  const { host, port, root, noBrowser } = getConfig();
-  const rootPath = path.join(workspaceFolders[0].uri.fsPath, root);
-
-  server = http.createServer((req, res) => {
-    const filePath = path.join(rootPath, req.url === '/' ? 'index.html' : req.url!);
-
-    fs.readFile(filePath, (err, content) => {
-      if (err) {
-        res.writeHead(404);
-        res.end('Arquivo não encontrado no CLAW Server');
-        return;
-      }
-      res.writeHead(200);
-      res.end(content);
-    });
-  });
-
-  server.listen(port, host, () => {
-    updateStatusBar(true);
-    vscode.window.showInformationMessage(`🟢 CLAW ativo em http://${host}:${port}`);
-
-    if (!noBrowser) {
-      openInternalPanel(host, port);
-    }
-  });
-
-  server.on('error', (err: NodeJS.ErrnoException) => {
-    if (err.code === 'EADDRINUSE') {
-      vscode.window.showErrorMessage(`CLAW: Porta ${port} já está em uso. Mude em Configurações.`);
-    } else {
-      vscode.window.showErrorMessage(`CLAW: Erro ao iniciar — ${err.message}`);
-    }
-    server = undefined;
-    updateStatusBar(false);
-  });
-}
-
-// -------------------------------------------------------
-// Parar servidor
-// -------------------------------------------------------
-function stopServer() {
-  if (server) {
-    server.close(() => {
-      vscode.window.showWarningMessage('🔴 Servidor CLAW parado.');
-    });
-    server = undefined;
-    updateStatusBar(false);
-  }
-}
-
-// -------------------------------------------------------
-// Painel interno (Webview)
 // -------------------------------------------------------
 function openInternalPanel(host: string, port: number) {
   const panel = vscode.window.createWebviewPanel(
@@ -232,5 +168,5 @@ function updateStatusBar(running: boolean) {
 }
 
 export function deactivate() {
-  stopServer();
+  liveServer.stop();
 }

@@ -14,6 +14,10 @@ node_modules/
 package-lock.json
 yarn.lock
 
+# Generated artifacts
+*.vsix
+task.json
+
 # Logs
 *.log
 npm-debug.log*

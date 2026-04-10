@@ -17,11 +17,19 @@
     ]
   },
   "include": [
-    "src/**/*"
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",
     ".vscode-test",
-    "_site"
+    "_site",
+    "out",
+    "**/*.html",
+    "**/*.css",
+    "**/*.scss",
+    "**/*.sass",
+    "**/*.md"
   ]
 }

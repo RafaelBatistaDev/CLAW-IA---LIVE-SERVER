@@ -47,3 +47,11 @@ coverage/
 tmp/
 temp/
 *.tmp
+
+# Build documentation (local use only)
+BUILD-INSTRUCTIONS.md
+INSTALLATION-GUIDE.md
+COMPILATION-SUMMARY.md
+compile-in-container.sh
+Dockerfile
+Makefile

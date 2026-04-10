@@ -160,6 +160,7 @@ export class LiveServer {
 
     this.rootPath = workspacePath;
     this.log(`Workspace detectado: ${workspacePath}`, 'info');
+    this.log(`📂 Root Path: ${this.rootPath}`, 'info');
 
     const config = vscode.workspace.getConfiguration();
 
@@ -202,9 +203,11 @@ export class LiveServer {
         vscode.window.showErrorMessage(`Root path não existe: ${root}`);
         return;
       }
-      this.log(`Root path customizado: ${finalRootPath}`, 'info');
+      this.log(`🎯 Root path customizado aplicado: ${root}`, 'info');
+      this.log(`📂 Novo Root Path: ${finalRootPath}`, 'info');
     }
     this.rootPath = finalRootPath;
+    this.log(`✅ Root Path final: ${this.rootPath}`, 'info');
 
     // Validar porta e host
     if (requestedPort !== 0 && !SecurityValidator.validatePort(requestedPort)) {
@@ -282,6 +285,11 @@ export class LiveServer {
       });
     }
 
+    // Rota para favicon (evita erro 404)
+    this.app.get('/favicon.ico', (req, res) => {
+      res.status(204).send();
+    });
+
     // Injeção de reload script + arquivos estáticos
     this.app.use((req, res, next) => this.injectReloadScript(req, res, next, useWebExt));
     this.app.use(express.static(this.rootPath));
@@ -310,6 +318,12 @@ export class LiveServer {
         if (indexHtml) {
           const html = await fs.promises.readFile(indexHtml, 'utf8');
           return res.send(this.insertReloadScript(html, useWebExt));
+        }
+
+        // Se não encontrou index.html, servir HTML padrão
+        if (requestedPath === '/' || !path.extname(requestedPath)) {
+          const defaultHtml = this.getDefaultHtml();
+          return res.send(this.insertReloadScript(defaultHtml, useWebExt));
         }
       }
 
@@ -398,7 +412,9 @@ export class LiveServer {
 
     // Abrir navegador
     if (!noBrowser) {
-      this.log(`Abrindo navegador: ${openUrl}`, 'info');
+      // Construir URL usando o arquivo atual (ou índice padrão)
+      const browserUrl = this.buildUrl(uri);
+      this.log(`Abrindo navegador: ${browserUrl}`, 'info');
       const browserOptions: any = {};
 
       if (advanceBrowser) {
@@ -407,49 +423,66 @@ export class LiveServer {
         browserOptions.app = { name: browser };
       }
 
-      await open(openUrl, browserOptions).catch(error => {
+      await open(browserUrl, browserOptions).catch(error => {
         this.log(`Erro ao abrir navegador: ${error.message}`, 'warn');
       });
     }
 
-    this.log(`CLAW IA - LIVE SERVER pronto em ${openUrl}`, 'info');
+    const finalUrl = this.buildUrl(uri);
+    this.log(`CLAW IA - LIVE SERVER pronto em ${finalUrl}`, 'info');
     if (!config.get<boolean>('liveServer.settings.donotShowInfoMsg', false)) {
-      vscode.window.showInformationMessage(`✅ Live Server iniciado em ${openUrl}`);
+      vscode.window.showInformationMessage(`✅ Live Server iniciado em ${finalUrl}`);
     }
   }
 
   public async stop() {
     this.log('Parando CLAW IA - LIVE SERVER...', 'info');
 
-    if (!this.server) {
-      this.log('Servidor não está rodando', 'warn');
-      vscode.window.showInformationMessage('CLAW IA - LIVE SERVER não está rodando.');
-      return;
+    try {
+      if (this.server) {
+        // Força o fechamento de todas as conexões do servidor
+        await new Promise<void>(resolve => {
+          this.server?.close(() => {
+            this.log('Servidor HTTP/HTTPS fechado', 'info');
+            resolve();
+          });
+        });
+        this.server.unref();
+      }
+
+      if (this.watcher) {
+        await this.watcher.close();
+        this.log('File watcher fechado', 'info');
+      }
+
+      if (this.wsServer) {
+        this.wsServer.close();
+        this.log('WebSocket server fechado', 'info');
+      }
+
+      this.log('Conexões encerradas com sucesso', 'info');
+    } catch (error) {
+      this.log(`Erro ao parar servidor: ${error}`, 'error');
+    } finally {
+      // ESSENCIAL: Resetar as variáveis independente de erro
+      this.server = null;
+      this.wsServer = null;
+      this.watcher = null;
+      this.app = null;
+      this.rootPath = null;
+      this.activeHost = null;
+      this.activePort = null;
+      this.activeProtocol = 'http';
+      this.changeTracker.clear();
+
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
+
+      this.log('✅ Estado do servidor resetado completamente', 'info');
+      vscode.window.showInformationMessage('CLAW IA - LIVE SERVER parado.');
     }
-
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = null;
-    }
-
-    this.log('Fechando conexões...', 'info');
-    await new Promise<void>(resolve => this.server?.close(() => resolve()));
-
-    this.watcher?.close();
-    this.wsServer?.close();
-
-    this.server = null;
-    this.wsServer = null;
-    this.watcher = null;
-    this.app = null;
-    this.rootPath = null;
-    this.activeHost = null;
-    this.activePort = null;
-    this.activeProtocol = 'http';
-    this.changeTracker.clear();
-
-    this.log('✅ CLAW IA - LIVE SERVER parado com sucesso', 'info');
-    vscode.window.showInformationMessage('CLAW IA - LIVE SERVER parado.');
   }
 
   public async open(uri?: vscode.Uri) {
@@ -462,16 +495,34 @@ export class LiveServer {
   }
 
   private getWorkspacePath(uri?: vscode.Uri): string | null {
-    const folder = uri
-      ? vscode.workspace.getWorkspaceFolder(uri)
-      : vscode.workspace.workspaceFolders?.[0];
-
-    if (folder?.uri.fsPath) {
-      return folder.uri.fsPath;
+    // Prioridade 1: URI do documento ativo (permite servir de qualquer subpasta)
+    if (uri && uri.fsPath) {
+      const folder = vscode.workspace.getWorkspaceFolder(uri);
+      // Se o arquivo está dentro de uma workspace folder, usar a raiz da workspace
+      if (folder?.uri.fsPath) {
+        return path.normalize(folder.uri.fsPath);
+      }
+      // Se não está em workspace, usar o diretório do arquivo
+      return path.normalize(path.dirname(uri.fsPath));
     }
 
-    if (uri?.fsPath) {
-      return path.dirname(uri.fsPath);
+    // Prioridade 2: Editor ativo (permite servir de qualquer subpasta)
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor?.document.uri.fsPath) {
+      const uri = activeEditor.document.uri;
+      const folder = vscode.workspace.getWorkspaceFolder(uri);
+      // Se o arquivo está dentro de uma workspace folder, usar a raiz da workspace
+      if (folder?.uri.fsPath) {
+        return path.normalize(folder.uri.fsPath);
+      }
+      // Se não está em workspace, usar o diretório do arquivo
+      return path.normalize(path.dirname(uri.fsPath));
+    }
+
+    // Prioridade 3: Primeira workspace folder
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (workspaceFolder?.uri.fsPath) {
+      return path.normalize(workspaceFolder.uri.fsPath);
     }
 
     return null;
@@ -480,17 +531,26 @@ export class LiveServer {
   private buildUrl(uri?: vscode.Uri): string {
     const config = vscode.workspace.getConfiguration();
     const port = this.activePort ?? config.get<number>('liveServer.settings.port', 5500);
-    const host = this.activeHost ?? config.get<string>('liveServer.settings.host', '127.0.0.1');
+    let host = this.activeHost ?? config.get<string>('liveServer.settings.host', '127.0.0.1');
     const httpsConfig = this.activeProtocol === 'https'
       ? { enable: true }
       : config.get<HttpsConfig>('liveServer.settings.https', { enable: false });
     const protocol = this.activeProtocol === 'https' || httpsConfig.enable ? 'https' : 'http';
 
+    // Normalizar host para localhost (0.0.0.0 não funciona em navegadores)
+    if (host === '0.0.0.0' || host === '::') {
+      host = '127.0.0.1';
+    }
+
     let relativePath = '';
     if (uri?.fsPath && this.rootPath) {
       const relative = path.relative(this.rootPath, uri.fsPath).split(path.sep).join('/');
       if (relative && !relative.startsWith('..')) {
-        relativePath = `/${relative}`;
+        // Suportar QUALQUER arquivo HTML (não apenas index.html)
+        const ext = path.extname(uri.fsPath).toLowerCase();
+        if (ext === '.html' || ext === '.htm') {
+          relativePath = `/${relative}`;
+        }
       }
     }
 
@@ -522,7 +582,11 @@ export class LiveServer {
       requestedPath === '/' ? 'index.html' : requestedPath
     );
 
-    if (!SecurityValidator.validateFileExtension(filePath, ['.html', '.htm'])) {
+    // Verificar se é arquivo HTML (qualquer nome com extensão .html ou .htm)
+    const ext = path.extname(filePath).toLowerCase();
+    const isHtmlFile = ext === '.html' || ext === '.htm';
+
+    if (!isHtmlFile) {
       next(); return;
     }
 
@@ -537,12 +601,86 @@ export class LiveServer {
   private async findIndexHtml(): Promise<string | null> {
     if (!this.rootPath) return null;
 
-    const candidates = ['index.html', path.join('src', 'index.html')];
+    // Buscar em múltiplos locais
+    const candidates = [
+      'index.html',
+      path.join('src', 'index.html'),
+      path.join('public', 'index.html'),
+      path.join('dist', 'index.html'),
+      path.join('build', 'index.html'),
+    ];
+
+    this.log(`🔍 Procurando index.html em: ${this.rootPath}`, 'info');
+
     for (const candidate of candidates) {
       const candidatePath = path.join(this.rootPath, candidate);
-      if (await this.fileExists(candidatePath)) return candidatePath;
+      if (await this.fileExists(candidatePath)) {
+        this.log(`✅ index.html encontrado: ${candidate}`, 'info');
+        return candidatePath;
+      }
     }
+
+    this.log(`⚠️  Nenhum index.html encontrado nos locais padrão`, 'warn');
     return null;
+  }
+
+  private getDefaultHtml(): string {
+    return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLAW Live Server</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 48px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+      max-width: 600px;
+    }
+    h1 { color: #333; margin-bottom: 16px; font-size: 32px; }
+    p { color: #666; line-height: 1.6; margin-bottom: 20px; }
+    .info {
+      background: #f0f4ff;
+      border-left: 4px solid #667eea;
+      padding: 16px;
+      border-radius: 8px;
+      text-align: left;
+      margin: 20px 0;
+      color: #333;
+    }
+    .highlight { color: #667eea; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 CLAW Live Server</h1>
+    <p>Servidor iniciado com sucesso!</p>
+    <div class="info">
+      <p><span class="highlight">✓ Servidor ativo</span></p>
+      <p>Nenhum arquivo <code>index.html</code> foi encontrado nesta workspace.</p>
+      <p style="margin-top: 12px; font-size: 14px;">
+        Crie um arquivo <code>index.html</code> na raiz da seu projeto ou em uma das pastas:
+        <code>src/</code>, <code>public/</code>, <code>dist/</code>, <code>build/</code>
+      </p>
+    </div>
+    <p style="font-size: 14px; color: #999; margin-top: 30px;">
+      O navegador será recarregado automaticamente quando você salvar arquivos.
+    </p>
+  </div>
+</body>
+</html>`;
   }
 
   private insertReloadScript(html: string, useWebExt: boolean = false): string {
@@ -577,46 +715,96 @@ export class LiveServer {
 
     const protocol = httpsConfig.enable ? 'wss' : 'ws';
     const sanitizedHost = SecurityValidator.sanitizeForScript(host);
-    const sanitizedPath = RELOAD_WS_PATH.replace(/'/g, "\\'");
 
+    // Script melhorado com debug e retry automático
     return `(function() {
+      let reconnectAttempts = 0;
+      const MAX_RECONNECT_ATTEMPTS = 30;
+
       function connect() {
         try {
-          const wsUrl = '${protocol}://${sanitizedHost}:${port}' + '${RELOAD_WS_PATH}';
+          const wsUrl = '${protocol}://${sanitizedHost}:${port}${RELOAD_WS_PATH}';
+          console.log('[CLAW IA] 🔌 Tentando conectar em:', wsUrl);
           const connection = new WebSocket(wsUrl);
 
           connection.onopen = function() {
-            console.log('[CLAW IA] Conectado ao Live Server');
+            reconnectAttempts = 0;
+            console.log('[CLAW IA] ✅ Conectado ao Live Server');
+            console.log('[CLAW IA] 👂 Aguardando mudanças de arquivo...');
           };
 
+          // Ouve 'reload' do servidor
           connection.onmessage = function(event) {
+            console.log('[CLAW IA] 📨 Mensagem recebida:', event.data);
             if (event.data === 'reload') {
-              console.log('[CLAW IA] Recarregando página...');
-              location.reload();
+              console.log('[CLAW IA] 🔄 Alteração detectada! Atualizando página em 100ms...');
+              setTimeout(function() {
+                console.log('[CLAW IA] 🚀 Recarregando página...');
+                window.location.reload();
+              }, 100);
             }
           };
 
           connection.onerror = function(error) {
-            console.error('[CLAW IA] Erro de conexão:', error);
+            console.error('[CLAW IA] ❌ Erro de conexão WebSocket:', error);
           };
 
           connection.onclose = function() {
-            console.log('[CLAW IA] Desconectado do Live Server, tentando reconectar em 1s...');
-            setTimeout(connect, 1000);
+            console.log('[CLAW IA] 🔌 Desconectado do servidor');
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+              reconnectAttempts++;
+              console.log('[CLAW IA] 🔄 Reconectando... (tentativa ' + reconnectAttempts + '/' + MAX_RECONNECT_ATTEMPTS + ')');
+              setTimeout(connect, 2000);
+            }
           };
         } catch (error) {
-          console.error('[CLAW IA] Erro ao conectar:', error);
-          setTimeout(connect, 1000);
+          console.error('[CLAW IA] ❌ Erro ao conectar:', error);
+          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttempts++;
+            setTimeout(connect, 2000);
+          }
         }
       }
 
-      connect();
+      // Inicia a conexão imediatamente
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+          console.log('[CLAW IA] 🚀 Live Reload ativo (Inicializado)');
+          connect();
+        });
+      } else {
+        console.log('[CLAW IA] 🚀 Live Reload ativo (Imediato)');
+        connect();
+      }
     })();`;
   }
 
-  public broadcastReload() {
-    this.wsServer?.clients.forEach(client => {
-      if (client.readyState === 1) client.send('reload');
+  public broadcastReload(fileExtension?: string) {
+    if (!this.wsServer) {
+      this.log('⚠️  WebSocket server não disponível', 'warn');
+      return;
+    }
+
+    let clientsNotified = 0;
+
+    // Enviar 'reload' para cada cliente conectado
+    this.wsServer.clients.forEach(client => {
+      // readyState 1 significa que a conexão está aberta
+      if (client.readyState === 1) {
+        try {
+          client.send('reload'); // Simples, universal
+          clientsNotified++;
+        } catch (error) {
+          this.log(`❌ Erro ao enviar reload: ${error}`, 'error');
+        }
+      }
     });
+
+    if (clientsNotified > 0) {
+      this.log(`📡 Sinal de recarregamento enviado para ${clientsNotified} navegador(es)`, 'info');
+    } else {
+      this.log('⚠️  Nenhum navegador conectado para receber reload', 'warn');
+    }
   }
 }
+

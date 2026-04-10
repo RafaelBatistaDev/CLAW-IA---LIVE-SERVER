@@ -22,11 +22,11 @@ export class SecurityValidator {
 
       // Resolver o path completo a partir da raiz
       const resolvedPath = path.resolve(rootPath, safeRequestedPath);
-      
+
       // Normalizar ambos os paths
       const normalizedRoot = path.normalize(path.resolve(rootPath));
       const normalizedPath = path.normalize(resolvedPath);
-      
+
       // Verificar se o path resolvido está dentro da raiz
       return normalizedPath === normalizedRoot || normalizedPath.startsWith(normalizedRoot + path.sep);
     } catch {
@@ -42,10 +42,10 @@ export class SecurityValidator {
   static validateHost(host: string): boolean {
     // Padrão para hostname válido
     const hostnamePattern = /^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$/;
-    
+
     // Padrão para IPv4
     const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-    
+
     // Localhost cases
     if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
       return true;
@@ -117,7 +117,7 @@ export class SecurityMiddleware {
   static pathTraversalMiddleware(rootPath: string) {
     return (req: express.Request, res: express.Response, next: express.NextFunction) => {
       const decodedPath = decodeURIComponent(req.path);
-      
+
       if (!SecurityValidator.validatePathTraversal(rootPath, decodedPath)) {
         res.status(403).json({
           error: 'Access Denied',
@@ -125,7 +125,7 @@ export class SecurityMiddleware {
         });
         return;
       }
-      
+
       next();
     };
   }
@@ -144,12 +144,15 @@ export class SecurityMiddleware {
     // Ativar XSS protection
     res.setHeader('X-XSS-Protection', '1; mode=block');
 
-    // CSP — permite iframe do webview VSCode E acesso direto no navegador externo
+    // CSP — permite iframe do webview VSCode, acesso direto no navegador e data URIs
     res.setHeader(
       'Content-Security-Policy',
       "default-src 'self'; " +
       "script-src 'self' 'wasm-unsafe-eval'; " +
       "style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data:; " +
+      "font-src 'self' data:; " +
+      "media-src 'self' data:; " +
       "frame-ancestors 'self' vscode-webview: http://127.0.0.1:* http://localhost:*"
     );
 

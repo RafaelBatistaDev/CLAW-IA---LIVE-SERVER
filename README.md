@@ -1,5 +1,8 @@
 # CLAW IA - LIVE SERVER
 
+[![Versão](https://img.shields.io/badge/version-1.1.3-blue)](https://github.com/RafaelBatistaDev/CLAW-IA---LIVE-SERVER/releases)
+[![Desenvolvedor](https://img.shields.io/badge/developer-Rafael%20Batista-%23007ACC)](https://github.com/RafaelBatistaDev)
+
 Uma extensão profissional para Visual Studio Code que fornece um servidor local de desenvolvimento com live reload, suporte a multi-root workspace, HTTPS automático e abertura de páginas na URL ativa do servidor.
 
 **Tags:** `Live Server`, `Live Reload`, `Local Dev Server`, `HTTPS`, `Multi-root`, `Web Preview`, `VS Code`, `SPA`
@@ -82,6 +85,12 @@ Exemplo básico:
 }
 ```
 
+### Portas dinâmicas e fixas
+
+- `liveServer.settings.port`: use `0` para permitir que o sistema escolha uma porta livre automaticamente.
+- Para um servidor sempre acessível em uma porta conhecida, defina um número específico entre `1024` e `65535`.
+- Use `liveServer.settings.useLocalIp`: `true` para disponibilizar o servidor no IP local da máquina.
+
 ### Configurações recomendadas
 
 - `liveServer.settings.noBrowser`: `false` para abrir automaticamente o servidor
@@ -116,5 +125,5 @@ Este projeto está licenciado sob a licença MIT.
 ## Contato
 
 - Autor: Rafael Batista
-- GitHub: https://github.com/RafaelBatistaDev
-- Repositório: https://github.com/RafaelBatistaDev/CLAW-IA---LIVE-SERVER
+- GitHub: <https://github.com/RafaelBatistaDev>
+- Repositório: <https://github.com/RafaelBatistaDev/CLAW-IA---LIVE-SERVER>

@@ -10,6 +10,7 @@ Uma extensão leve para Visual Studio Code que oferece um servidor local de dese
 - HTTPS com certificado autoassinado quando habilitado
 - `claw.openExternal` abre a URL ativa do servidor em execução
 - Configurações avançadas via `liveServer.settings.*`
+- `liveServer.settings.port`: use `0` para porta aleatória ou defina um número fixo para porta conhecida
 - Comandos diretos no Command Palette e menu de contexto
 
 ## Comandos principais

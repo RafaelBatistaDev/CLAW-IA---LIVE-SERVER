@@ -55,7 +55,7 @@ export function activate(context: vscode.ExtensionContext) {
       await liveServer.stop();
     } else {
       const uri = vscode.window.activeTextEditor?.document.uri;
-      await liveServer.start(uri);
+      await liveServer.open(uri);
     }
     updateStatusBar(liveServer.isRunning());
   });
@@ -63,7 +63,7 @@ export function activate(context: vscode.ExtensionContext) {
   // 3. Iniciar
   const startCmd = vscode.commands.registerCommand('claw.startServer', async () => {
     const uri = vscode.window.activeTextEditor?.document.uri;
-    await liveServer.start(uri);
+    await liveServer.open(uri);
     updateStatusBar(liveServer.isRunning());
   });
 
@@ -105,7 +105,18 @@ export function activate(context: vscode.ExtensionContext) {
     );
   });
 
-  // 8. Recria a Status Bar se as configurações mudarem
+  // 8. File watcher global para enviar reload ao salvar qualquer arquivo
+  const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*');
+  const notifyReload = async () => {
+    if (liveServer.isRunning()) {
+      liveServer.broadcastReload();
+    }
+  };
+  fileWatcher.onDidChange(notifyReload);
+  fileWatcher.onDidCreate(notifyReload);
+  fileWatcher.onDidDelete(notifyReload);
+
+  // 9. Recria a Status Bar se as configurações mudarem
   const onConfigChange = vscode.workspace.onDidChangeConfiguration(e => {
     if (e.affectsConfiguration('liveServer.settings')) {
       createStatusBarItem(context);
@@ -120,6 +131,7 @@ export function activate(context: vscode.ExtensionContext) {
     openExternal,
     changeWorkspace,
     showSettings,
+    fileWatcher,
     onConfigChange,
   );
 }

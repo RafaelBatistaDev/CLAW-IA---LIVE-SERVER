@@ -28,6 +28,7 @@ interface ProxyConfig {
 }
 
 const RELOAD_ROUTE = '/__claw-ia/reload.js';
+const RELOAD_WS_PATH = '/__claw-ia/reload-ws';
 
 export class LiveServer {
   private app: express.Express | null = null;
@@ -186,10 +187,10 @@ export class LiveServer {
       this.log(`Usando IP local: ${host}`, 'info');
     }
 
-    // Porta aleatória
-    if (port === 0) {
-      port = Math.floor(Math.random() * (9999 - 3000) + 3000);
-      this.log(`Porta aleatória gerada: ${port}`, 'info');
+    // Porta aleatória solicitada
+    const requestedPort = port;
+    if (requestedPort === 0) {
+      this.log('Porta 0 detectada: o sistema escolherá uma porta disponível automaticamente.', 'info');
     }
 
     // Aplicar root path customizado
@@ -206,9 +207,9 @@ export class LiveServer {
     this.rootPath = finalRootPath;
 
     // Validar porta e host
-    if (!SecurityValidator.validatePort(port)) {
-      this.log(`Porta inválida: ${port}`, 'error');
-      vscode.window.showErrorMessage(`Porta inválida: ${port}. Use uma porta entre 1024 e 65535.`);
+    if (requestedPort !== 0 && !SecurityValidator.validatePort(requestedPort)) {
+      this.log(`Porta inválida: ${requestedPort}`, 'error');
+      vscode.window.showErrorMessage(`Porta inválida: ${requestedPort}. Use uma porta entre 1024 e 65535.`);
       return;
     }
 
@@ -218,14 +219,16 @@ export class LiveServer {
       return;
     }
 
-    // Verificar disponibilidade da porta
-    this.log(`Verificando disponibilidade da porta ${port}...`, 'info');
-    if (!(await this.isPortAvailable(port))) {
-      this.log(`Falha ao iniciar: porta ${port} não está disponível`, 'error');
-      vscode.window.showErrorMessage(`Porta ${port} já está em uso. Mude a porta nas configurações e tente novamente.`);
-      return;
+    if (requestedPort !== 0) {
+      // Verificar disponibilidade da porta fixa
+      this.log(`Verificando disponibilidade da porta ${requestedPort}...`, 'info');
+      if (!(await this.isPortAvailable(requestedPort))) {
+        this.log(`Falha ao iniciar: porta ${requestedPort} não está em uso`, 'error');
+        vscode.window.showErrorMessage(`Porta ${requestedPort} já está em uso. Mude a porta nas configurações e tente novamente.`);
+        return;
+      }
+      this.log(`Porta ${requestedPort} disponível`, 'info');
     }
-    this.log(`Porta ${port} disponível`, 'info');
 
     this.app = express();
 
@@ -314,10 +317,8 @@ export class LiveServer {
     });
 
     const protocol = httpsConfig.enable ? 'https' : 'http';
-    const openUrl = `${protocol}://${host}:${port}`;
 
     this.activeHost = host;
-    this.activePort = port;
     this.activeProtocol = protocol;
 
     // Criar servidor HTTP ou HTTPS
@@ -342,21 +343,30 @@ export class LiveServer {
 
     // WebSocket
     this.log('Configurando WebSocket server...', 'info');
-    this.wsServer = new WsServer({ server: this.server });
+    this.wsServer = new WsServer({ server: this.server, path: RELOAD_WS_PATH });
     this.wsServer.on('connection', (socket: any) => {
       socket.send('connected');
       this.log('Cliente WebSocket conectado', 'info');
     });
 
     // Iniciar servidor
-    this.log(`Iniciando servidor em ${openUrl}...`, 'info');
     await new Promise<void>((resolve, reject) => {
-      this.server?.listen(port, () => {
+      this.server?.listen(requestedPort, () => {
+        const address = this.server?.address();
+        if (address && typeof address !== 'string') {
+          port = address.port;
+          this.activePort = port;
+        }
+
+        const openUrl = `${protocol}://${host}:${port}`;
+        this.log(`Iniciando servidor em ${openUrl}...`, 'info');
         this.log(`✅ Servidor iniciado com sucesso em ${openUrl}`, 'info');
         resolve();
       });
       this.server?.once('error', reject);
     });
+
+    const openUrl = `${protocol}://${host}:${port}`;
 
     // File watcher com debounce
     this.log(`Iniciando file watcher com debounce ${waitMs}ms...`, 'info');
@@ -443,24 +453,28 @@ export class LiveServer {
   }
 
   public async open(uri?: vscode.Uri) {
-    const alreadyRunning = !!this.server;
     if (!this.server) await this.start(uri);
     if (!this.server || !this.rootPath) return;
 
     const url = this.buildUrl(uri);
-    const noBrowser = vscode.workspace.getConfiguration().get<boolean>('liveServer.settings.noBrowser', false);
-
-    if (alreadyRunning || noBrowser) {
-      await open(url);
-      vscode.window.showInformationMessage(`Abrindo CLAW IA - LIVE SERVER em ${url}`);
-    }
+    await open(url);
+    vscode.window.showInformationMessage(`Abrindo CLAW IA - LIVE SERVER em ${url}`);
   }
 
   private getWorkspacePath(uri?: vscode.Uri): string | null {
     const folder = uri
       ? vscode.workspace.getWorkspaceFolder(uri)
       : vscode.workspace.workspaceFolders?.[0];
-    return folder?.uri.fsPath || null;
+
+    if (folder?.uri.fsPath) {
+      return folder.uri.fsPath;
+    }
+
+    if (uri?.fsPath) {
+      return path.dirname(uri.fsPath);
+    }
+
+    return null;
   }
 
   private buildUrl(uri?: vscode.Uri): string {
@@ -563,37 +577,44 @@ export class LiveServer {
 
     const protocol = httpsConfig.enable ? 'wss' : 'ws';
     const sanitizedHost = SecurityValidator.sanitizeForScript(host);
+    const sanitizedPath = RELOAD_WS_PATH.replace(/'/g, "\\'");
 
     return `(function() {
-      try {
-        const wsUrl = '${protocol}://${sanitizedHost}:${port}';
-        const connection = new WebSocket(wsUrl);
+      function connect() {
+        try {
+          const wsUrl = '${protocol}://${sanitizedHost}:${port}' + '${RELOAD_WS_PATH}';
+          const connection = new WebSocket(wsUrl);
 
-        connection.onopen = function() {
-          console.log('[CLAW IA] Conectado ao Live Server');
-        };
+          connection.onopen = function() {
+            console.log('[CLAW IA] Conectado ao Live Server');
+          };
 
-        connection.onmessage = function(event) {
-          if (event.data === 'reload') {
-            console.log('[CLAW IA] Recarregando página...');
-            location.reload();
-          }
-        };
+          connection.onmessage = function(event) {
+            if (event.data === 'reload') {
+              console.log('[CLAW IA] Recarregando página...');
+              location.reload();
+            }
+          };
 
-        connection.onerror = function(error) {
-          console.error('[CLAW IA] Erro de conexão:', error);
-        };
+          connection.onerror = function(error) {
+            console.error('[CLAW IA] Erro de conexão:', error);
+          };
 
-        connection.onclose = function() {
-          console.log('[CLAW IA] Desconectado do Live Server');
-        };
-      } catch (error) {
-        console.error('[CLAW IA] Erro ao conectar:', error);
+          connection.onclose = function() {
+            console.log('[CLAW IA] Desconectado do Live Server, tentando reconectar em 1s...');
+            setTimeout(connect, 1000);
+          };
+        } catch (error) {
+          console.error('[CLAW IA] Erro ao conectar:', error);
+          setTimeout(connect, 1000);
+        }
       }
+
+      connect();
     })();`;
   }
 
-  private broadcastReload() {
+  public broadcastReload() {
     this.wsServer?.clients.forEach(client => {
       if (client.readyState === 1) client.send('reload');
     });

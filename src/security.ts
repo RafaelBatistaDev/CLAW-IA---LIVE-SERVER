@@ -11,16 +11,24 @@ export class SecurityValidator {
    */
   static validatePathTraversal(rootPath: string, requestedPath: string): boolean {
     try {
-      // Resolver o path completo
-      const resolvedPath = path.resolve(rootPath, requestedPath);
+      // Normalize path in a way that avoids absolute path reset
+      let safeRequestedPath = requestedPath;
+      if (path.isAbsolute(safeRequestedPath)) {
+        safeRequestedPath = safeRequestedPath.replace(/^([A-Za-z]:)?[\\/]+/, '');
+      }
+      if (safeRequestedPath.startsWith(path.sep)) {
+        safeRequestedPath = safeRequestedPath.slice(1);
+      }
+
+      // Resolver o path completo a partir da raiz
+      const resolvedPath = path.resolve(rootPath, safeRequestedPath);
       
       // Normalizar ambos os paths
       const normalizedRoot = path.normalize(path.resolve(rootPath));
       const normalizedPath = path.normalize(resolvedPath);
       
       // Verificar se o path resolvido está dentro da raiz
-      return normalizedPath.startsWith(normalizedRoot + path.sep) || 
-             normalizedPath === normalizedRoot;
+      return normalizedPath === normalizedRoot || normalizedPath.startsWith(normalizedRoot + path.sep);
     } catch {
       return false;
     }

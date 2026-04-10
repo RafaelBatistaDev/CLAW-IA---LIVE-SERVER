@@ -40,23 +40,22 @@ const path = __importStar(require("path"));
 let server;
 let statusBarItem;
 // -------------------------------------------------------
-// Lê as configurações do package.json em tempo real
+// Lê as configurações em tempo real
 // -------------------------------------------------------
 function getConfig() {
     const cfg = vscode.workspace.getConfiguration('liveServer.settings');
     return {
         port: cfg.get('port', 5500),
         host: cfg.get('host', '127.0.0.1'),
-        openBrowser: cfg.get('openBrowser', true),
+        root: cfg.get('root', '/'),
+        noBrowser: cfg.get('noBrowser', false),
         showStatusBarItem: cfg.get('showStatusBarItem', true),
         statusBarAlignment: cfg.get('statusBarAlignment', 'right'),
         statusBarPriority: cfg.get('statusBarPriority', 100),
-        root: cfg.get('root', '/'),
-        noBrowser: cfg.get('noBrowser', false),
     };
 }
 // -------------------------------------------------------
-// Cria (ou recria) o item na Status Bar conforme config
+// Cria (ou recria) o item na Status Bar
 // -------------------------------------------------------
 function createStatusBarItem(context) {
     const { showStatusBarItem, statusBarAlignment, statusBarPriority } = getConfig();
@@ -84,19 +83,23 @@ function activate(context) {
             startServer();
         }
     });
-    // 3. Iniciar diretamente
+    // 3. Iniciar
     const startCmd = vscode.commands.registerCommand('claw.startServer', () => {
-        if (!(server === null || server === void 0 ? void 0 : server.listening))
+        if (!(server === null || server === void 0 ? void 0 : server.listening)) {
             startServer();
-        else
+        }
+        else {
             vscode.window.showInformationMessage('CLAW: Servidor já está rodando.');
+        }
     });
-    // 4. Parar diretamente
+    // 4. Parar
     const stopCmd = vscode.commands.registerCommand('claw.stopServer', () => {
-        if (server === null || server === void 0 ? void 0 : server.listening)
+        if (server === null || server === void 0 ? void 0 : server.listening) {
             stopServer();
-        else
+        }
+        else {
             vscode.window.showInformationMessage('CLAW: Nenhum servidor ativo.');
+        }
     });
     // 5. Abrir no navegador externo
     const openExternal = vscode.commands.registerCommand('claw.openExternal', () => {
@@ -117,7 +120,7 @@ function activate(context) {
             vscode.window.showInformationMessage(`CLAW: Workspace definida para "${picked.folder.name}"`);
         }
     }));
-    // 7. Abrir configurações da extensão
+    // 7. Abrir configurações
     const showSettings = vscode.commands.registerCommand('claw.showSettings', () => {
         vscode.commands.executeCommand('workbench.action.openSettings', '@ext:RafaelBatista.claw-ia-live-server');
     });
@@ -125,7 +128,6 @@ function activate(context) {
     const onConfigChange = vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('liveServer.settings')) {
             createStatusBarItem(context);
-            // Mantém o estado correto após recriar
             updateStatusBar(!!(server === null || server === void 0 ? void 0 : server.listening));
         }
     });
@@ -167,7 +169,7 @@ function startServer() {
             vscode.window.showErrorMessage(`CLAW: Porta ${port} já está em uso. Mude em Configurações.`);
         }
         else {
-            vscode.window.showErrorMessage(`CLAW: Erro ao iniciar servidor — ${err.message}`);
+            vscode.window.showErrorMessage(`CLAW: Erro ao iniciar — ${err.message}`);
         }
         server = undefined;
         updateStatusBar(false);

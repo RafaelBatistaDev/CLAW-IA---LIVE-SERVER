@@ -49,7 +49,7 @@ const fs_1 = __importDefault(require("fs"));
 const security_1 = require("./security");
 const os_1 = __importDefault(require("os"));
 const express_http_proxy_1 = __importDefault(require("express-http-proxy"));
-const RELOAD_ROUTE = '/__live-server-plus-plus/reload.js';
+const RELOAD_ROUTE = '/__claw-ia/reload.js';
 class LiveServer {
     constructor(logger) {
         this.app = null;
@@ -59,7 +59,7 @@ class LiveServer {
         this.rootPath = null;
         this.logger = null;
         this.debounceTimer = null;
-        this.changeTracker = new Map(); // Track file changes
+        this.changeTracker = new Map();
         this.logger = logger || null;
     }
     setLogger(logger) {
@@ -84,18 +84,17 @@ class LiveServer {
                 testServer.once('error', (error) => {
                     if (error.code === 'EADDRINUSE') {
                         this.log(`Porta ${port} já está em uso`, 'warn');
-                        resolve(false);
                     }
                     else {
                         this.log(`Erro ao verificar porta: ${error.message}`, 'error');
-                        resolve(false);
                     }
+                    resolve(false);
                 });
                 testServer.once('listening', () => {
                     testServer.close();
                     resolve(true);
                 });
-                testServer.listen(port, 'localhost');
+                testServer.listen(port, '127.0.0.1');
             });
         });
     }
@@ -108,7 +107,7 @@ class LiveServer {
                 }
             }
         }
-        return 'localhost';
+        return '127.0.0.1';
     }
     readHttpsConfig() {
         return __awaiter(this, void 0, void 0, function* () {
@@ -152,6 +151,7 @@ class LiveServer {
         });
     }
     start(uri) {
+        var _a, _b;
         return __awaiter(this, void 0, void 0, function* () {
             if (this.server) {
                 this.log('Servidor já está em execução', 'warn');
@@ -168,38 +168,34 @@ class LiveServer {
             this.rootPath = workspacePath;
             this.log(`Workspace detectado: ${workspacePath}`, 'info');
             const config = vscode.workspace.getConfiguration();
-            // Ler configurações com fallback para nova API
-            let port = config.get('liveServer.settings.port', config.get('liveServerPlusPlus.port', 5500));
-            let host = config.get('liveServer.settings.host', config.get('liveServerPlusPlus.host', '127.0.0.1'));
+            let port = config.get('liveServer.settings.port', 5500);
+            let host = config.get('liveServer.settings.host', '127.0.0.1');
             const useLocalIp = config.get('liveServer.settings.useLocalIp', false);
             const noBrowser = config.get('liveServer.settings.noBrowser', false);
-            const openBrowser = config.get('liveServer.settings.openBrowser', !noBrowser);
-            const browser = config.get('liveServer.settings.customBrowser', '') ||
-                config.get('liveServerPlusPlus.browser', '');
-            const advanceBrowser = config.get('liveServer.settings.advanceCustomBrowserCmdLine', '');
+            const browser = (_a = config.get('liveServer.settings.CustomBrowser', null)) !== null && _a !== void 0 ? _a : '';
+            const advanceBrowser = (_b = config.get('liveServer.settings.AdvanceCustomBrowserCmdLine', null)) !== null && _b !== void 0 ? _b : '';
             const root = config.get('liveServer.settings.root', '/');
-            const corsEnabled = config.get('liveServer.settings.cors', config.get('liveServerPlusPlus.enableCORS', false));
+            const corsEnabled = config.get('liveServer.settings.cors', false);
             const customHeaders = config.get('liveServer.settings.headers', {});
             const fullReload = config.get('liveServer.settings.fullReload', false);
             const waitMs = config.get('liveServer.settings.wait', 100);
-            const reloadTag = config.get('liveServer.settings.reloadTag', 'body');
             const useWebExt = config.get('liveServer.settings.useWebExt', false);
-            const ignoreFiles = config.get('liveServer.settings.ignoreFiles', config.get('liveServerPlusPlus.ignoreFiles', ['**/node_modules/**', '**/.git/**']));
+            const ignoreFiles = config.get('liveServer.settings.ignoreFiles', ['**/node_modules/**', '**/.git/**']);
             const httpsConfig = config.get('liveServer.settings.https', { enable: false });
-            const proxyConfig = config.get('liveServer.settings.proxy', { enable: false, baseUri: '/', proxyUri: 'http://localhost/' });
+            const proxyConfig = config.get('liveServer.settings.proxy', { enable: false, baseUri: '/', proxyUri: 'http://127.0.0.1:80' });
             const mounts = config.get('liveServer.settings.mount', []);
             const entryFile = config.get('liveServer.settings.file', '');
             // Ajustar host para IP local se necessário
-            if (useLocalIp && host === 'localhost') {
+            if (useLocalIp && (host === 'localhost' || host === '127.0.0.1')) {
                 host = this.getLocalIpAddress();
                 this.log(`Usando IP local: ${host}`, 'info');
             }
-            // Handle random port
+            // Porta aleatória
             if (port === 0) {
                 port = Math.floor(Math.random() * (9999 - 3000) + 3000);
                 this.log(`Porta aleatória gerada: ${port}`, 'info');
             }
-            // Aplicar root path
+            // Aplicar root path customizado
             let finalRootPath = this.rootPath;
             if (root && root !== '/') {
                 finalRootPath = path_1.default.join(finalRootPath, root);
@@ -211,7 +207,7 @@ class LiveServer {
                 this.log(`Root path customizado: ${finalRootPath}`, 'info');
             }
             this.rootPath = finalRootPath;
-            // Validar configurações antes de iniciar
+            // Validar porta e host
             if (!security_1.SecurityValidator.validatePort(port)) {
                 this.log(`Porta inválida: ${port}`, 'error');
                 vscode.window.showErrorMessage(`Porta inválida: ${port}. Use uma porta entre 1024 e 65535.`);
@@ -222,31 +218,28 @@ class LiveServer {
                 vscode.window.showErrorMessage(`Host inválido: ${host}. Use localhost, 127.0.0.1 ou um hostname válido.`);
                 return;
             }
-            // Verificar se a porta está disponível
+            // Verificar disponibilidade da porta
             this.log(`Verificando disponibilidade da porta ${port}...`, 'info');
-            const portAvailable = yield this.isPortAvailable(port);
-            if (!portAvailable) {
+            if (!(yield this.isPortAvailable(port))) {
                 this.log(`Falha ao iniciar: porta ${port} não está disponível`, 'error');
                 vscode.window.showErrorMessage(`Porta ${port} já está em uso. Mude a porta nas configurações e tente novamente.`);
                 return;
             }
             this.log(`Porta ${port} disponível`, 'info');
             this.app = (0, express_1.default)();
-            // Adicionar middlewares de segurança
+            // Middlewares de segurança
             this.log('Configurando middlewares de segurança...', 'info');
             this.app.use(security_1.SecurityMiddleware.securityHeadersMiddleware());
             this.app.use(security_1.SecurityMiddleware.pathTraversalMiddleware(this.rootPath));
-            // Adicionar custom headers
+            // Headers customizados
             if (Object.keys(customHeaders).length > 0) {
                 this.log('Adicionando headers customizados', 'info');
                 this.app.use((req, res, next) => {
-                    Object.entries(customHeaders).forEach(([key, value]) => {
-                        res.setHeader(key, value);
-                    });
+                    Object.entries(customHeaders).forEach(([key, value]) => res.setHeader(key, value));
                     next();
                 });
             }
-            // Adicionar CORS
+            // CORS
             if (corsEnabled) {
                 this.log('CORS habilitado', 'info');
                 this.app.use((req, res, next) => {
@@ -256,7 +249,7 @@ class LiveServer {
                     next();
                 });
             }
-            // Adicionar proxies
+            // Proxy reverso
             if (proxyConfig.enable) {
                 this.log(`Proxy configurado: ${proxyConfig.baseUri} -> ${proxyConfig.proxyUri}`, 'info');
                 try {
@@ -271,7 +264,7 @@ class LiveServer {
                     this.log(`Erro ao configurar proxy: ${error}`, 'warn');
                 }
             }
-            // Adicionar mounts
+            // Mounts
             if (mounts.length > 0) {
                 this.log(`Montando ${mounts.length} diretórios...`, 'info');
                 mounts.forEach(([route, dirPath]) => {
@@ -280,21 +273,20 @@ class LiveServer {
                     this.log(`  ${route} -> ${fullPath}`, 'info');
                 });
             }
-            // Middleware de reload script injection
-            this.app.use((req, res, next) => this.injectReloadScript(req, res, next, reloadTag, useWebExt));
+            // Injeção de reload script + arquivos estáticos
+            this.app.use((req, res, next) => this.injectReloadScript(req, res, next, useWebExt));
             this.app.use(express_1.default.static(this.rootPath));
-            // Rota para SPA
+            // Rota SPA / fallback
             this.app.get('*', (req, res, next) => __awaiter(this, void 0, void 0, function* () {
-                if (!this.rootPath) {
+                if (!this.rootPath)
                     return next();
-                }
                 if (entryFile) {
                     const entryPath = path_1.default.join(this.rootPath, entryFile);
                     try {
                         const html = yield fs_1.default.promises.readFile(entryPath, 'utf8');
-                        return res.send(this.insertReloadScript(html, reloadTag, useWebExt));
+                        return res.send(this.insertReloadScript(html, useWebExt));
                     }
-                    catch (_a) {
+                    catch (_c) {
                         this.log(`Entry file não encontrado: ${entryFile}`, 'warn');
                     }
                 }
@@ -302,35 +294,27 @@ class LiveServer {
                 const filePath = path_1.default.join(this.rootPath, requestedPath);
                 const extension = path_1.default.extname(filePath).toLowerCase();
                 const spaExtensions = ['.js', '.jsx', '.ts', '.tsx', '.cshtml', '.razor'];
-                if (spaExtensions.includes(extension)) {
+                if (spaExtensions.includes(extension) || requestedPath === '/' || !path_1.default.extname(requestedPath)) {
                     const indexHtml = yield this.findIndexHtml();
                     if (indexHtml) {
                         const html = yield fs_1.default.promises.readFile(indexHtml, 'utf8');
-                        return res.send(this.insertReloadScript(html, reloadTag, useWebExt));
-                    }
-                }
-                if (requestedPath === '/' || !path_1.default.extname(requestedPath)) {
-                    const indexHtml = yield this.findIndexHtml();
-                    if (indexHtml) {
-                        const html = yield fs_1.default.promises.readFile(indexHtml, 'utf8');
-                        return res.send(this.insertReloadScript(html, reloadTag, useWebExt));
+                        return res.send(this.insertReloadScript(html, useWebExt));
                     }
                 }
                 next();
             }));
             const protocol = httpsConfig.enable ? 'https' : 'http';
             const openUrl = `${protocol}://${host}:${port}`;
-            // Criar servidor HTTP/HTTPS
+            // Criar servidor HTTP ou HTTPS
             if (httpsConfig.enable) {
                 const httpsFiles = yield this.readHttpsConfig();
                 const httpsOptions = {
-                    cert: httpsFiles.cert || undefined,
-                    key: httpsFiles.key || undefined,
+                    cert: httpsFiles.cert,
+                    key: httpsFiles.key,
                 };
                 if (!httpsOptions.cert || !httpsOptions.key) {
                     this.log('Gerando certificado SSL auto-assinado...', 'info');
-                    const attrs = [{ name: 'commonName', value: host }];
-                    const pems = selfsigned_1.default.generate(attrs, { days: 365 });
+                    const pems = selfsigned_1.default.generate([{ name: 'commonName', value: host }], { days: 365 });
                     httpsOptions.cert = pems.cert;
                     httpsOptions.key = pems.private;
                 }
@@ -339,53 +323,49 @@ class LiveServer {
             else {
                 this.server = http_1.default.createServer(this.app);
             }
+            // WebSocket
             this.log('Configurando WebSocket server...', 'info');
             this.wsServer = new ws_1.Server({ server: this.server });
             this.wsServer.on('connection', (socket) => {
                 socket.send('connected');
                 this.log('Cliente WebSocket conectado', 'info');
             });
+            // Iniciar servidor
             this.log(`Iniciando servidor em ${openUrl}...`, 'info');
             yield new Promise((resolve, reject) => {
-                var _a;
+                var _a, _b;
                 (_a = this.server) === null || _a === void 0 ? void 0 : _a.listen(port, () => {
                     this.log(`✅ Servidor iniciado com sucesso em ${openUrl}`, 'info');
                     resolve();
                 });
+                (_b = this.server) === null || _b === void 0 ? void 0 : _b.once('error', reject);
             });
-            this.log('Iniciando file watcher com debounce ' + waitMs + 'ms...', 'info');
+            // File watcher com debounce
+            this.log(`Iniciando file watcher com debounce ${waitMs}ms...`, 'info');
             this.watcher = chokidar_1.default.watch(this.rootPath, {
                 ignored: ignoreFiles,
                 ignoreInitial: true,
                 persistent: true
             });
-            // Implementar debounce com delay customizável
             this.watcher.on('all', (event, filePath) => {
                 const now = Date.now();
                 const lastChange = this.changeTracker.get(filePath) || 0;
-                // Evitar reloads duplicados para o mesmo arquivo
-                if (now - lastChange < 1000) {
+                if (now - lastChange < 1000)
                     return;
-                }
                 this.changeTracker.set(filePath, now);
-                if (this.debounceTimer) {
+                if (this.debounceTimer)
                     clearTimeout(this.debounceTimer);
-                }
                 this.debounceTimer = setTimeout(() => {
-                    const extension = path_1.default.extname(filePath).toLowerCase();
-                    const isCssChange = extension === '.css';
+                    const ext = path_1.default.extname(filePath).toLowerCase();
+                    const isCssOnly = ext === '.css' && !fullReload;
                     this.log(`Detectado: ${event} - ${path_1.default.basename(filePath)}`, 'info');
-                    if (isCssChange && !fullReload) {
-                        this.log('Reload CSS-only (sem reload completo)', 'info');
-                    }
-                    else {
-                        this.log('Enviando reload completo...', 'info');
-                    }
+                    this.log(isCssOnly ? 'Reload CSS-only' : 'Enviando reload completo...', 'info');
                     this.broadcastReload();
                 }, waitMs);
             });
-            if (openBrowser && !noBrowser) {
-                this.log(`Abrindo navegador com URL ${openUrl}...`, 'info');
+            // Abrir navegador
+            if (!noBrowser) {
+                this.log(`Abrindo navegador: ${openUrl}`, 'info');
                 const browserOptions = {};
                 if (advanceBrowser) {
                     browserOptions.app = advanceBrowser;
@@ -397,7 +377,7 @@ class LiveServer {
                     this.log(`Erro ao abrir navegador: ${error.message}`, 'warn');
                 });
             }
-            this.log(`CLAW IA - LIVE SERVER está pronto em ${openUrl}`, 'info');
+            this.log(`CLAW IA - LIVE SERVER pronto em ${openUrl}`, 'info');
             if (!config.get('liveServer.settings.donotShowInfoMsg', false)) {
                 vscode.window.showInformationMessage(`✅ Live Server iniciado em ${openUrl}`);
             }
@@ -417,10 +397,7 @@ class LiveServer {
                 this.debounceTimer = null;
             }
             this.log('Fechando conexões...', 'info');
-            yield new Promise(resolve => {
-                var _a;
-                (_a = this.server) === null || _a === void 0 ? void 0 : _a.close(() => resolve());
-            });
+            yield new Promise(resolve => { var _a; return (_a = this.server) === null || _a === void 0 ? void 0 : _a.close(() => resolve()); });
             (_a = this.watcher) === null || _a === void 0 ? void 0 : _a.close();
             (_b = this.wsServer) === null || _b === void 0 ? void 0 : _b.close();
             this.server = null;
@@ -428,18 +405,17 @@ class LiveServer {
             this.watcher = null;
             this.app = null;
             this.rootPath = null;
+            this.changeTracker.clear();
             this.log('✅ CLAW IA - LIVE SERVER parado com sucesso', 'info');
             vscode.window.showInformationMessage('CLAW IA - LIVE SERVER parado.');
         });
     }
     open(uri) {
         return __awaiter(this, void 0, void 0, function* () {
-            if (!this.server) {
+            if (!this.server)
                 yield this.start(uri);
-            }
-            if (!this.server || !this.rootPath) {
+            if (!this.server || !this.rootPath)
                 return;
-            }
             const url = this.buildUrl(uri);
             yield (0, open_1.default)(url);
             vscode.window.showInformationMessage(`Abrindo CLAW IA - LIVE SERVER em ${url}`);
@@ -454,9 +430,10 @@ class LiveServer {
     }
     buildUrl(uri) {
         const config = vscode.workspace.getConfiguration();
-        const port = config.get('liveServerPlusPlus.port', 5500);
-        const host = config.get('liveServerPlusPlus.host', 'localhost');
-        const protocol = config.get('liveServerPlusPlus.useHttps', false) ? 'https' : 'http';
+        const port = config.get('liveServer.settings.port', 5500);
+        const host = config.get('liveServer.settings.host', '127.0.0.1');
+        const httpsConfig = config.get('liveServer.settings.https', { enable: false });
+        const protocol = httpsConfig.enable ? 'https' : 'http';
         let relativePath = '';
         if ((uri === null || uri === void 0 ? void 0 : uri.fsPath) && this.rootPath) {
             const relative = path_1.default.relative(this.rootPath, uri.fsPath).split(path_1.default.sep).join('/');
@@ -466,7 +443,7 @@ class LiveServer {
         }
         return `${protocol}://${host}:${port}${relativePath}`;
     }
-    injectReloadScript(req, res, next, reloadTag, useWebExt = false) {
+    injectReloadScript(req, res, next, useWebExt = false) {
         return __awaiter(this, void 0, void 0, function* () {
             if (!this.rootPath) {
                 next();
@@ -477,21 +454,18 @@ class LiveServer {
                 return;
             }
             const requestedPath = decodeURIComponent(req.path.split('?')[0]);
-            // Validar path traversal
             if (!security_1.SecurityValidator.validatePathTraversal(this.rootPath, requestedPath)) {
                 res.status(403).json({ error: 'Access Denied' });
                 return;
             }
             const filePath = path_1.default.join(this.rootPath, requestedPath === '/' ? 'index.html' : requestedPath);
-            // Validar extensão de arquivo
             if (!security_1.SecurityValidator.validateFileExtension(filePath, ['.html', '.htm'])) {
                 next();
                 return;
             }
             try {
                 const html = yield fs_1.default.promises.readFile(filePath, 'utf8');
-                const injected = this.insertReloadScript(html, reloadTag, useWebExt);
-                res.send(injected);
+                res.send(this.insertReloadScript(html, useWebExt));
             }
             catch (_a) {
                 next();
@@ -500,89 +474,64 @@ class LiveServer {
     }
     findIndexHtml() {
         return __awaiter(this, void 0, void 0, function* () {
-            if (!this.rootPath) {
+            if (!this.rootPath)
                 return null;
-            }
             const candidates = ['index.html', path_1.default.join('src', 'index.html')];
             for (const candidate of candidates) {
                 const candidatePath = path_1.default.join(this.rootPath, candidate);
-                if (yield this.exists(candidatePath)) {
+                if (yield this.fileExists(candidatePath))
                     return candidatePath;
-                }
             }
             return null;
         });
     }
-    exists(filePath) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                yield fs_1.default.promises.access(filePath, fs_1.default.constants.R_OK);
-                return true;
-            }
-            catch (_a) {
-                return false;
-            }
-        });
-    }
-    insertReloadScript(html, reloadTag, useWebExt = false) {
-        // Se estiver usando Web Extension, não injeta script
-        if (useWebExt) {
+    insertReloadScript(html, useWebExt = false) {
+        if (useWebExt)
             return html;
-        }
         const scriptTag = `<script src="${RELOAD_ROUTE}"></script>`;
-        if (reloadTag === 'head') {
-            if (html.includes('<head')) {
-                return html.replace(/<head([^>]*)>/i, match => `${match}${scriptTag}`);
-            }
-        }
         if (html.includes('</body>')) {
             return html.replace(/<\/body>/i, `${scriptTag}</body>`);
         }
         return html + scriptTag;
     }
     getReloadScript(useWebExt = false) {
-        const config = vscode.workspace.getConfiguration();
-        let port = config.get('liveServer.settings.port', config.get('liveServerPlusPlus.port', 5500));
-        let host = config.get('liveServer.settings.host', config.get('liveServerPlusPlus.host', 'localhost'));
-        const useLocalIp = config.get('liveServer.settings.useLocalIp', false);
-        const useHttpsConfig = config.get('liveServer.settings.https', { enable: false });
-        // Se Web Extension está ativada, retorna script vazio
         if (useWebExt) {
             return `console.log('[CLAW IA] Live Reload controlado pela Web Extension');`;
         }
-        // Validar configurações
-        if (!security_1.SecurityValidator.validatePort(port)) {
+        const config = vscode.workspace.getConfiguration();
+        let port = config.get('liveServer.settings.port', 5500);
+        let host = config.get('liveServer.settings.host', '127.0.0.1');
+        const useLocalIp = config.get('liveServer.settings.useLocalIp', false);
+        const httpsConfig = config.get('liveServer.settings.https', { enable: false });
+        if (!security_1.SecurityValidator.validatePort(port))
             throw new Error(`Porta inválida: ${port}`);
-        }
-        if (!security_1.SecurityValidator.validateHost(host)) {
+        if (!security_1.SecurityValidator.validateHost(host))
             throw new Error(`Host inválido: ${host}`);
-        }
-        if (useLocalIp && host === 'localhost') {
+        if (useLocalIp && (host === 'localhost' || host === '127.0.0.1')) {
             host = this.getLocalIpAddress();
         }
-        const protocol = useHttpsConfig.enable ? 'wss' : 'ws';
+        const protocol = httpsConfig.enable ? 'wss' : 'ws';
         const sanitizedHost = security_1.SecurityValidator.sanitizeForScript(host);
-        // Script seguro com sanitização
         return `(function() {
       try {
         const wsUrl = '${protocol}://${sanitizedHost}:${port}';
         const connection = new WebSocket(wsUrl);
-        
+
         connection.onopen = function() {
           console.log('[CLAW IA] Conectado ao Live Server');
         };
-        
+
         connection.onmessage = function(event) {
           if (event.data === 'reload') {
             console.log('[CLAW IA] Recarregando página...');
             location.reload();
           }
         };
-        
+
         connection.onerror = function(error) {
           console.error('[CLAW IA] Erro de conexão:', error);
         };
-        
+
         connection.onclose = function() {
           console.log('[CLAW IA] Desconectado do Live Server');
         };
@@ -594,9 +543,8 @@ class LiveServer {
     broadcastReload() {
         var _a;
         (_a = this.wsServer) === null || _a === void 0 ? void 0 : _a.clients.forEach(client => {
-            if (client.readyState === 1) {
+            if (client.readyState === 1)
                 client.send('reload');
-            }
         });
     }
 }

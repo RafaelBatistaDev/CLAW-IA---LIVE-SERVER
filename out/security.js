@@ -136,14 +136,17 @@ class SecurityMiddleware {
      */
     static securityHeadersMiddleware() {
         return (req, res, next) => {
-            // Prevenir clickjacking
-            res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+            // Remove X-Frame-Options — ele conflita com frame-ancestors do CSP
+            // Os dois juntos causam comportamento imprevisível em browsers modernos
             // Prevenir MIME sniffing
             res.setHeader('X-Content-Type-Options', 'nosniff');
             // Ativar XSS protection
             res.setHeader('X-XSS-Protection', '1; mode=block');
-            // Content Security Policy
-            res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'");
+            // CSP — permite iframe do webview VSCode E acesso direto no navegador externo
+            res.setHeader('Content-Security-Policy', "default-src 'self'; " +
+                "script-src 'self' 'wasm-unsafe-eval'; " +
+                "style-src 'self' 'unsafe-inline'; " +
+                "frame-ancestors 'self' vscode-webview: http://127.0.0.1:* http://localhost:*");
             next();
         };
     }

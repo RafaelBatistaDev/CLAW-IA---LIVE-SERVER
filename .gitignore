@@ -6,7 +6,8 @@
 !.vscode/extensions.json
 
 # Build output
-dist/
+out/
+build/
 
 # Dependencies
 node_modules/
